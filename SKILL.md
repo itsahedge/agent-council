@@ -414,6 +414,208 @@ This skill integrates with OpenClaw's gateway configuration:
 }
 ```
 
+## Agent Coordination
+
+Your main agent coordinates with specialized agents using OpenClaw's built-in session management tools.
+
+### List Active Agents
+
+See all active agents and their recent activity:
+
+```typescript
+sessions_list({
+  kinds: ["agent"],
+  limit: 10,
+  messageLimit: 3  // Show last 3 messages per agent
+})
+```
+
+### Send Messages to Agents
+
+**Direct communication:**
+```typescript
+sessions_send({
+  label: "watson",  // Agent ID
+  message: "Research the competitive landscape for X"
+})
+```
+
+**Wait for response:**
+```typescript
+sessions_send({
+  label: "watson",
+  message: "What did you find about X?",
+  timeoutSeconds: 300  // Wait up to 5 minutes
+})
+```
+
+### Spawn Sub-Agent Tasks
+
+For complex work, spawn a sub-agent in an isolated session:
+
+```typescript
+sessions_spawn({
+  agentId: "watson",  // Optional: use specific agent
+  task: "Research competitive landscape for X and write a report",
+  model: "anthropic/claude-opus-4-5",  // Optional: override model
+  runTimeoutSeconds: 3600,  // 1 hour max
+  cleanup: "delete"  // Delete session after completion
+})
+```
+
+The sub-agent will:
+1. Execute the task in isolation
+2. Announce completion back to your session
+3. Self-delete (if `cleanup: "delete"`)
+
+### Check Agent History
+
+Review what an agent has been working on:
+
+```typescript
+sessions_history({
+  sessionKey: "watson-session-key",
+  limit: 50
+})
+```
+
+### Coordination Patterns
+
+**1. Direct delegation (Discord-bound agents):**
+- User messages agent's Discord channel
+- Agent responds directly in that channel
+- Main agent doesn't need to coordinate
+
+**2. Programmatic delegation (main agent → sub-agent):**
+```typescript
+// Main agent delegates task
+sessions_send({
+  label: "watson",
+  message: "Research X and update memory/research-X.md"
+})
+
+// Watson works independently, updates files
+// Main agent checks later or Watson reports back
+```
+
+**3. Spawn for complex tasks:**
+```typescript
+// For longer-running, isolated work
+sessions_spawn({
+  agentId: "watson",
+  task: "Deep dive: analyze competitors A, B, C. Write report to reports/competitors.md",
+  runTimeoutSeconds: 7200,
+  cleanup: "keep"  // Keep session for review
+})
+```
+
+**4. Agent-to-agent communication:**
+Agents can send messages to each other:
+```typescript
+// In Watson's context
+sessions_send({
+  label: "picasso",
+  message: "Create an infographic from data in reports/research.md"
+})
+```
+
+### Best Practices
+
+**When to use Discord bindings:**
+- ✅ Domain-specific agents (research, health, images)
+- ✅ User wants direct access to agent
+- ✅ Agent should respond to channel activity
+
+**When to use sessions_send:**
+- ✅ Programmatic coordination
+- ✅ Main agent delegates to specialists
+- ✅ Need response in same session
+
+**When to use sessions_spawn:**
+- ✅ Long-running tasks (>5 minutes)
+- ✅ Complex multi-step work
+- ✅ Want isolation from main session
+- ✅ Background processing
+
+### Example: Research Workflow
+
+```typescript
+// Main agent receives request: "Research competitor X"
+
+// 1. Check if Watson is active
+const agents = sessions_list({ kinds: ["agent"] })
+
+// 2. Delegate to Watson
+sessions_send({
+  label: "watson",
+  message: "Research competitor X: products, pricing, market position. Write findings to memory/research-X.md"
+})
+
+// 3. Watson works independently:
+//    - Searches web
+//    - Analyzes data
+//    - Updates memory file
+//    - Reports back when done
+
+// 4. Main agent retrieves results
+const results = Read("agents/watson/memory/research-X.md")
+
+// 5. Share with user
+"Research complete! Watson found: [summary]"
+```
+
+### Communication Flow
+
+**Main Agent (You) ↔ Specialized Agents:**
+
+```
+User Request
+    ↓
+Main Agent (Claire)
+    ↓
+sessions_send("watson", "Research X")
+    ↓
+Watson Agent
+    ↓
+- Uses web_search
+- Uses web_fetch
+- Updates memory files
+    ↓
+Responds to main session
+    ↓
+Main Agent synthesizes and replies
+```
+
+**Discord-Bound Agents:**
+
+```
+User posts in #research channel
+    ↓
+Watson Agent (bound to channel)
+    ↓
+- Sees message directly
+- Responds in channel
+- No main agent involvement
+```
+
+**Hybrid Approach:**
+
+```
+User: "Research X" (main channel)
+    ↓
+Main Agent delegates to Watson
+    ↓
+Watson researches and reports back
+    ↓
+Main Agent: "Done! Watson found..."
+    ↓
+User: "Show me more details"
+    ↓
+Main Agent: "@watson post your full findings in #research"
+    ↓
+Watson posts detailed report in #research channel
+```
+
 ## Troubleshooting
 
 **Agent Creation Issues:**
