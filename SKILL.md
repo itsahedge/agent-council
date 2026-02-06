@@ -95,11 +95,10 @@ scripts/create-agent.sh \
 
 Create agents through natural conversation - one question at a time.
 
-**📋 Important:** See `CONVERSATIONAL-FORMAT.md` for exact formatting rules and flow guidelines.
-
-**Quick reference:**
+**Formatting Rules:**
 - **Number each question** (1., 2., 3., etc.) — helps users track progress
 - No fluff text ("Got it! Starting...") — just ask the question
+- Use (a), (b), (c) for sub-options (not numbered lists — Discord auto-formats those)
 - Don't show the auto-generated ID — it's an internal detail  
 - Use bullet points for summary (not tables)
 - Agent should introduce itself in its bound channel after creation
@@ -143,8 +142,6 @@ Agent: ✓ Style: philosophical, contemplative, uses ancient wisdom
           (b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
           ...
 ```
-
-See `CONVERSATIONAL-FORMAT.md` for the complete flow with all steps and formatting rules.
 
 **Features:**
 - 🎯 One question at a time (no overwhelming walls of text)
