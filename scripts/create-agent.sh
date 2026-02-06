@@ -313,12 +313,16 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   read -p "Timezone: " TIMEZONE
   
   # Create cron job
+  # IMPORTANT: Memory updates MUST use --session main (not isolated) to access conversation history
+  # --agent-id assigns the job to this agent
+  # --session main gives access to the agent's conversation context
   openclaw cron add \
     --name "$NAME Daily Memory Update" \
+    --agent-id "$ID" \
     --cron "$MINUTE $HOUR * * *" \
     --tz "$TIMEZONE" \
-    --session "$ID" \
-    --system-event "End of day memory update: Review today's activity and conversations. Update $WORKSPACE/memory/\$(date +%Y-%m-%d).md with a comprehensive summary of: what you worked on, decisions made, progress on tasks, things learned, and any important context. Be thorough but concise. After updating, reply HEARTBEAT_OK (silent operation)." \
+    --session main \
+    --system-event "End of day memory update: Review today's conversations and activity. Create/update $WORKSPACE/memory/\$(date +%Y-%m-%d).md with a comprehensive summary of: what you worked on, decisions made, progress on tasks, things learned, and any important context. Be thorough but concise. After updating, send a brief '☁️ Memory Updated' confirmation message to your Discord channel." \
     --wake now
   
   echo -e "${GREEN}✓ Daily memory cron job created${NC}"
