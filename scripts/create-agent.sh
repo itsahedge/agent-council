@@ -16,6 +16,9 @@ SPECIALTY=""
 MODEL=""
 WORKSPACE=""
 DISCORD_CHANNEL=""
+SETUP_CRON="no"
+CRON_TIME=""
+CRON_TZ=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -47,6 +50,18 @@ while [[ $# -gt 0 ]]; do
       DISCORD_CHANNEL="$2"
       shift 2
       ;;
+    --setup-cron)
+      SETUP_CRON="$2"
+      shift 2
+      ;;
+    --cron-time)
+      CRON_TIME="$2"
+      shift 2
+      ;;
+    --cron-tz)
+      CRON_TZ="$2"
+      shift 2
+      ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
       exit 1
@@ -66,8 +81,19 @@ if [[ -z "$NAME" ]] || [[ -z "$ID" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo "    --specialty \"What this agent does\" \\"
   echo "    --model \"provider/model-name\" \\"
   echo "    --workspace \"/path/to/workspace\" \\"
-  echo "    [--discord-channel \"1234567890\"]"
+  echo "    [--discord-channel \"1234567890\"] \\"
+  echo "    [--setup-cron yes|no] \\"
+  echo "    [--cron-time \"HH:MM\"] \\"
+  echo "    [--cron-tz \"America/New_York\"]"
   exit 1
+fi
+
+# Validate cron arguments if setup-cron is yes
+if [[ "$SETUP_CRON" == "yes" ]]; then
+  if [[ -z "$CRON_TIME" ]] || [[ -z "$CRON_TZ" ]]; then
+    echo -e "${RED}Error: --cron-time and --cron-tz are required when --setup-cron is yes${NC}"
+    exit 1
+  fi
 fi
 
 echo -e "${BLUE}🤖 Creating agent: $NAME ($ID)${NC}"
@@ -199,7 +225,9 @@ echo ""
 
 # 4. Get current config to preserve existing agents
 echo -e "${YELLOW}⚙️  Getting current gateway config...${NC}"
-CURRENT_CONFIG=$(openclaw gateway config.get --format json 2>/dev/null || echo "{}")
+CONFIG_RESPONSE=$(openclaw gateway call config.get --json 2>/dev/null)
+CURRENT_CONFIG=$(echo "$CONFIG_RESPONSE" | jq -r '.parsed // {}')
+BASE_HASH=$(echo "$CONFIG_RESPONSE" | jq -r '.hash // empty')
 
 # Extract existing agents list
 EXISTING_AGENTS=$(echo "$CURRENT_CONFIG" | jq -c '.agents.list // []')
@@ -281,46 +309,29 @@ echo ""
 TEMP_CONFIG=$(mktemp)
 echo "$CONFIG_PATCH" > "$TEMP_CONFIG"
 
-openclaw gateway config.patch --raw "$(cat $TEMP_CONFIG)" --note "Add $NAME agent via agent-creator skill"
+openclaw gateway call config.patch --params "{\"raw\": $(cat $TEMP_CONFIG | jq -c '.' | jq -Rs .), \"baseHash\": \"$BASE_HASH\", \"note\": \"Add $NAME agent via agent-council skill\"}" --json
 rm "$TEMP_CONFIG"
 
 echo -e "${GREEN}✓ Gateway config updated (restart will happen automatically)${NC}"
 echo ""
 
 # 7. Optional: Set up daily memory cron job
-echo -e "${YELLOW}📅 Memory System${NC}"
-echo ""
-echo "Would you like to set up a daily memory cron job for $NAME?"
-echo "This will create a job that reviews and updates the agent's daily memory file."
-echo ""
-read -p "Create daily memory cron? (y/n): " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  echo -e "${YELLOW}Setting up daily memory cron for $NAME...${NC}"
-  
-  # Prompt for time
-  echo ""
-  echo "What time should the daily memory update run? (24-hour format, e.g., 23:30)"
-  read -p "Time (HH:MM): " MEMORY_TIME
+if [[ "$SETUP_CRON" == "yes" ]]; then
+  echo -e "${YELLOW}📅 Setting up daily memory cron for $NAME...${NC}"
   
   # Parse time
-  HOUR=$(echo "$MEMORY_TIME" | cut -d: -f1)
-  MINUTE=$(echo "$MEMORY_TIME" | cut -d: -f2)
-  
-  # Prompt for timezone
-  echo ""
-  echo "What timezone should be used? (e.g., America/New_York, Europe/London)"
-  read -p "Timezone: " TIMEZONE
+  HOUR=$(echo "$CRON_TIME" | cut -d: -f1)
+  MINUTE=$(echo "$CRON_TIME" | cut -d: -f2)
   
   # Create cron job
   # IMPORTANT: Memory updates MUST use --session main (not isolated) to access conversation history
-  # --agent-id assigns the job to this agent
+  # --agent assigns the job to this agent
   # --session main gives access to the agent's conversation context
   openclaw cron add \
     --name "$NAME Daily Memory Update" \
-    --agent-id "$ID" \
+    --agent "$ID" \
     --cron "$MINUTE $HOUR * * *" \
-    --tz "$TIMEZONE" \
+    --tz "$CRON_TZ" \
     --session main \
     --system-event "End of day memory update: Review today's conversations and activity. Create/update $WORKSPACE/memory/\$(date +%Y-%m-%d).md with a comprehensive summary of: what you worked on, decisions made, progress on tasks, things learned, and any important context. Be thorough but concise. After updating, send a brief '☁️ Memory Updated' confirmation message to your Discord channel." \
     --wake now
