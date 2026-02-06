@@ -106,10 +106,10 @@ Create agents through natural conversation - one question at a time.
 
 ```bash
 # Start a new agent creation session
-conversational-agent-helper.sh --start
+scripts/conversational-agent-helper.sh --start
 
 # Or from OpenClaw directly:
-cd ~/.openclaw/skills/agent-council && ./conversational-agent-helper.sh --start
+cd ~/.openclaw/skills/agent-council && ./scripts/conversational-agent-helper.sh --start
 ```
 
 **How it works:**
@@ -158,16 +158,16 @@ See `CONVERSATIONAL-FORMAT.md` for the complete flow with all steps and formatti
 **Commands:**
 ```bash
 # Provide an answer
-./conversational-agent-helper.sh "your answer here"
+./scripts/conversational-agent-helper.sh "your answer here"
 
 # Check current status
-./conversational-agent-helper.sh --status
+./scripts/conversational-agent-helper.sh --status
 
 # Cancel session
-./conversational-agent-helper.sh --cancel
+./scripts/conversational-agent-helper.sh --cancel
 
 # Execute creation (when complete)
-./conversational-agent-helper.sh --execute
+./scripts/conversational-agent-helper.sh --execute
 ```
 
 **Perfect for:**

@@ -347,22 +347,22 @@ Test the flow manually:
 ```bash
 # Start
 cd ~/.openclaw/skills/agent-council
-./conversational-agent-helper.sh --start
+./scripts/conversational-agent-helper.sh --start
 
 # Answer each question
-./conversational-agent-helper.sh "TestAgent"
-./conversational-agent-helper.sh "Test description"
-./conversational-agent-helper.sh "casual"
-./conversational-agent-helper.sh "2"
-./conversational-agent-helper.sh "3"
-./conversational-agent-helper.sh "2"
-./conversational-agent-helper.sh "21:00 EST"
+./scripts/conversational-agent-helper.sh "TestAgent"
+./scripts/conversational-agent-helper.sh "Test description"
+./scripts/conversational-agent-helper.sh "casual"
+./scripts/conversational-agent-helper.sh "2"
+./scripts/conversational-agent-helper.sh "3"
+./scripts/conversational-agent-helper.sh "2"
+./scripts/conversational-agent-helper.sh "21:00 EST"
 
 # Check status
-./conversational-agent-helper.sh --status
+./scripts/conversational-agent-helper.sh --status
 
 # Execute
-./conversational-agent-helper.sh --execute
+./scripts/conversational-agent-helper.sh --execute
 ```
 
 ## Summary of Changes from Original
