@@ -186,6 +186,23 @@ apt install python3
 
 ## Gateway Config Issues
 
+### "Agents disappeared after config.patch" (CRITICAL)
+
+**Cause:** `config.patch` does shallow merge — **arrays get REPLACED, not merged**.
+
+If you patch with:
+```json
+{ "agents": { "list": [{ "id": "new-agent" }] } }
+```
+This **WIPES all existing agents** and replaces with just the new one!
+
+**Fix:**
+1. Get current config: `openclaw gateway config.get --json | jq '.parsed.agents.list'`
+2. Build new array with ALL existing agents + new agent
+3. Patch with the complete array
+
+**Prevention:** The `create-agent.sh` script handles this correctly — it reads existing agents and appends the new one before patching.
+
 ### "Config patch failed"
 
 1. Validate JSON syntax:
