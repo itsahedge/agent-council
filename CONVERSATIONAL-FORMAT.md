@@ -4,22 +4,7 @@ This guide defines the exact formatting and flow for conversational agent creati
 
 ## Formatting Rules
 
-### 1. No Extra Fluff Text
-**❌ Wrong:**
-```
-Got it! Starting a new agent creation flow. Let's do this conversationally.
-
-What should we call this agent? (e.g., Watson, Picasso, Aurelius)
-```
-
-**✅ Right:**
-```
-1. What should we call this agent? (e.g., Watson, Picasso, Aurelius)
-```
-
-**Rule:** Only show the actual question. No introductory text, no enthusiasm, no preamble.
-
-### 1b. Numbered Steps
+### 1. Number Every Question (CRITICAL)
 **❌ Wrong:**
 ```
 What should we call this agent?
@@ -38,9 +23,24 @@ What's Aurelius's communication style?
 3. What's Aurelius's communication style?
 ```
 
-**Rule:** Each question is numbered sequentially. This helps users track progress through the flow.
+**Rule:** Each question MUST be numbered sequentially (1., 2., 3., etc.). This helps users track progress through the flow. Never skip this.
 
-### 2. Agent Name Confirmation
+### 2. No Extra Fluff Text
+**❌ Wrong:**
+```
+Got it! Starting a new agent creation flow. Let's do this conversationally.
+
+1. What should we call this agent? (e.g., Watson, Picasso, Aurelius)
+```
+
+**✅ Right:**
+```
+1. What should we call this agent? (e.g., Watson, Picasso, Aurelius)
+```
+
+**Rule:** Only show the actual question. No introductory text, no enthusiasm, no preamble.
+
+### 3. Agent Name Confirmation
 **❌ Wrong:**
 ```
 ✓ Agent: Aurelius 📚
@@ -58,7 +58,7 @@ What does Aurelius do?
 
 **Rule:** Don't show the auto-generated ID to the user. It's an internal detail.
 
-### 3. Summary Format
+### 4. Summary Format
 **❌ Wrong (Table):**
 ```
 ┌─────────────┬──────────────────────────────────────────┐
@@ -83,7 +83,7 @@ What does Aurelius do?
 
 **Rule:** Use clean bullet-point format with bold labels. One line per setting.
 
-### 4. Final Confirmation
+### 5. Final Confirmation
 **❌ Wrong:**
 ```
 Create this agent? (yes/no)
@@ -96,7 +96,7 @@ Create this agent?
 
 **Rule:** Keep it simple. User can say yes/no/confirm/create without needing explicit options.
 
-### 5. Post-Creation Introduction
+### 6. Post-Creation Introduction
 After successful creation, the agent should **introduce itself in its bound channel** and tag the user.
 
 **Example:**

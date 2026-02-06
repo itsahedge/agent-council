@@ -98,6 +98,7 @@ Create agents through natural conversation - one question at a time.
 **📋 Important:** See `CONVERSATIONAL-FORMAT.md` for exact formatting rules and flow guidelines.
 
 **Quick reference:**
+- **Number each question** (1., 2., 3., etc.) — helps users track progress
 - No fluff text ("Got it! Starting...") — just ask the question
 - Don't show the auto-generated ID — it's an internal detail  
 - Use bullet points for summary (not tables)
