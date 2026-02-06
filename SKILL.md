@@ -44,7 +44,34 @@ openclaw gateway config.patch --raw '{
 
 ## Part 1: Agent Creation
 
-### Quick Start
+### Quick Start (Interactive)
+
+**Recommended for most users:**
+
+```bash
+scripts/create-agent-interactive.sh
+```
+
+This launches an interactive wizard that guides you through:
+1. ✨ Agent name and basic info
+2. 🤖 Model selection
+3. 📁 Workspace setup
+4. 💬 Discord channel (existing, new, or none)
+5. 🎭 Personality and communication style
+6. 🛠️ Skills and tools
+7. 🚫 Boundaries and constraints
+8. 📅 Daily memory cron setup
+
+The wizard will:
+- Look up Discord channels by name
+- Create new channels if needed
+- Auto-generate agent ID from name
+- Customize SOUL.md with your inputs
+- Set up everything in one smooth flow
+
+### Quick Start (Programmatic)
+
+**For automation and scripts:**
 
 ```bash
 scripts/create-agent.sh \
@@ -54,14 +81,130 @@ scripts/create-agent.sh \
   --specialty "Research and analysis specialist" \
   --model "anthropic/claude-opus-4-5" \
   --workspace "$HOME/agents/watson" \
-  --discord-channel "1234567890"
+  --discord-channel "1234567890" \
+  --setup-cron yes \
+  --cron-time "23:00" \
+  --cron-tz "America/New_York"
 ```
 
-### Workflow
+### Workflow Options
 
-#### 1. Gather Requirements
+#### Option A: Conversational (Discord / Chat) 🆕
 
-Ask the user:
+**Perfect for Discord, Slack, or any chat interface!**
+
+Create agents through natural conversation - one question at a time.
+
+**📋 Important:** See `CONVERSATIONAL-FORMAT.md` for exact formatting rules and flow guidelines.
+
+**Quick reference:**
+- **Number each question** (1., 2., 3., etc.) — helps users track progress
+- No fluff text ("Got it! Starting...") — just ask the question
+- Don't show the auto-generated ID — it's an internal detail  
+- Use bullet points for summary (not tables)
+- Agent should introduce itself in its bound channel after creation
+
+```bash
+# Start a new agent creation session
+conversational-agent-helper.sh --start
+
+# Or from OpenClaw directly:
+cd ~/.openclaw/skills/agent-council && ./conversational-agent-helper.sh --start
+```
+
+**How it works:**
+
+1. **Start:** Triggers the first question ("What should we call this agent?")
+2. **Answer:** Provide your answer in the next message
+3. **Continue:** The agent asks the next question automatically
+4. **Complete:** When done, confirm with "create agent" to execute
+
+**Example conversation:**
+
+```
+You: create agent
+Agent: 1. What should we call this agent? (e.g., Watson, Picasso, Aurelius)
+
+You: Aurelius
+Agent: ✓ Agent: Aurelius 📚
+       
+       2. What does Aurelius do? (1-2 sentences)
+
+You: Stoic philosopher and motivational guide
+Agent: ✓ Specialty: Stoic philosopher and motivational guide
+       
+       3. What's Aurelius's communication style?
+
+You: philosophical, contemplative, uses ancient wisdom
+Agent: ✓ Style: philosophical, contemplative, uses ancient wisdom
+       
+       4. Which model should Aurelius use?
+          a. opus — Claude Opus 4.5 (deep reasoning)
+          b. sonnet — Claude Sonnet 4.5 (balanced) ⭐
+          ...
+```
+
+See `CONVERSATIONAL-FORMAT.md` for the complete flow with all steps and formatting rules.
+
+**Features:**
+- 🎯 One question at a time (no overwhelming walls of text)
+- 🤖 Auto-generates ID and emoji from name
+- 💾 Saves progress between messages
+- 🔄 Can pause and resume
+- ✅ Shows clean bullet-point summary before creating
+- 🎨 Fully customizable responses
+- 👋 Agent introduces itself in its channel after creation
+
+**Commands:**
+```bash
+# Provide an answer
+./conversational-agent-helper.sh "your answer here"
+
+# Check current status
+./conversational-agent-helper.sh --status
+
+# Cancel session
+./conversational-agent-helper.sh --cancel
+
+# Execute creation (when complete)
+./conversational-agent-helper.sh --execute
+```
+
+**Perfect for:**
+- ✅ Discord bot interactions
+- ✅ Chat-based interfaces
+- ✅ Step-by-step guidance
+- ✅ Users new to agent creation
+
+#### Option B: Interactive Wizard (Terminal)
+
+Run the interactive wizard and follow the prompts:
+
+```bash
+scripts/create-agent-interactive.sh
+```
+
+**Features:**
+- 🎯 Step-by-step guidance
+- 🔍 Channel lookup by name or ID
+- 🆕 Create new channels on the fly
+- 🎨 Personality customization
+- 📝 Auto-enhanced SOUL.md
+- ✅ Confirmation before creating
+
+**Perfect for:**
+- First-time agent creation
+- When you want to explore options
+- Setting up agents with rich context
+- Interactive development
+
+#### Option C: Programmatic Creation
+
+Use when you have all the details ready or need automation:
+
+**1. Gather Requirements**
+
+Prepare these values:
 - **Agent name** (e.g., "Watson")
 - **Agent ID** (lowercase, hyphenated, e.g., "watson")
 - **Emoji** (e.g., "🔬")
@@ -70,7 +213,7 @@ Ask the user:
 - **Workspace** (where to create agent files)
 - **Discord channel ID** (optional)
 
-#### 2. Run Creation Script
+**2. Run Creation Script**
 
 ```bash
 scripts/create-agent.sh \
@@ -80,7 +223,10 @@ scripts/create-agent.sh \
   --specialty "What this agent does" \
   --model "provider/model-name" \
   --workspace "/path/to/workspace" \
-  --discord-channel "1234567890"  # Optional
+  --discord-channel "1234567890" \  # Optional
+  --setup-cron yes \                # Optional (default: no)
+  --cron-time "23:00" \             # Required if setup-cron=yes
+  --cron-tz "America/New_York"      # Required if setup-cron=yes
 ```
 
 The script automatically:
@@ -89,14 +235,33 @@ The script automatically:
 - ✅ Updates gateway config (preserves existing agents)
 - ✅ Adds Discord channel binding (if specified)
 - ✅ Restarts gateway to apply changes
-- ✅ Prompts for daily memory cron setup
+- ✅ Sets up daily memory cron (if --setup-cron=yes)
 
-#### 3. Customize Agent
+**3. Customize Agent**
 
 After creation:
 - **SOUL.md** - Refine personality, responsibilities, boundaries
 - **HEARTBEAT.md** - Add periodic checks and cron logic
 - **Workspace files** - Add agent-specific configuration
+
+### Which Workflow Should I Use?
+
+| Feature | Conversational | Terminal Wizard | Programmatic |
+|---------|----------------|-----------------|--------------|
+| **Best for** | Discord/chat interfaces | Terminal exploration | Automation, scripts |
+| **Interface** | One question at a time | All-in-one wizard | Single command |
+| **Can pause/resume** | ✅ Yes (saves state) | ❌ Must complete | N/A |
+| **Channel lookup** | ✅ By name or ID | ✅ By name or ID | ID only |
+| **Create new channels** | ✅ Built-in | ✅ Built-in | Manual |
+| **Context gathering** | ✅ Step-by-step | ✅ Guided prompts | Manual |
+| **SOUL.md enhancement** | ✅ Auto-populated | ✅ Auto-populated | Template only |
+| **Speed** | Slow (chat pace) | Moderate (interactive) | Fast (one command) |
+| **Flexibility** | High (one at a time) | High (choose as you go) | High (all options as flags) |
+
+**Recommendation:** 
+- **Discord/chat users:** Use conversational mode for natural step-by-step creation
+- **Terminal users:** Use the terminal wizard for richer exploration
+- **Automation/scripts:** Use programmatic mode for bulk operations or CI/CD
 
 ### Agent Architecture
 
@@ -184,7 +349,10 @@ scripts/create-agent.sh \
   --specialty "Deep research and competitive analysis" \
   --model "anthropic/claude-opus-4-5" \
   --workspace "$HOME/agents/watson" \
-  --discord-channel "1234567890"
+  --discord-channel "1234567890" \
+  --setup-cron yes \
+  --cron-time "23:00" \
+  --cron-tz "America/New_York"
 ```
 
 **Image generation agent:**
@@ -208,7 +376,10 @@ scripts/create-agent.sh \
   --specialty "Health tracking and wellness monitoring" \
   --model "anthropic/claude-opus-4-5" \
   --workspace "$HOME/agents/nurse-joy" \
-  --discord-channel "5555555555"
+  --discord-channel "5555555555" \
+  --setup-cron yes \
+  --cron-time "22:30" \
+  --cron-tz "America/New_York"
 ```
 
 ## Part 2: Discord Channel Management
@@ -356,7 +527,42 @@ python3 scripts/setup-channel.py --name channel-name --context "Purpose"
 
 ## Scripts Reference
 
+### create-agent-interactive.sh
+
+**Interactive wizard for agent creation.**
+
+**Usage:**
+```bash
+scripts/create-agent-interactive.sh
+```
+
+**Features:**
+- 🎯 Step-by-step guided setup
+- 📋 Model selection menu
+- 🔍 Channel lookup by name or ID
+- 🆕 Create new Discord channels
+- 🎨 Personality customization prompts
+- 🛠️ Skills and tools configuration
+- 📝 Auto-enhanced SOUL.md
+- ✅ Confirmation summary
+
+**Workflow:**
+1. Basic info (name, ID, emoji, specialty)
+2. Model selection (menu with 5 options)
+3. Workspace path
+4. Discord channel (existing by name/ID, new, or none)
+5. Agent context (communication style, personality, skills, boundaries)
+6. Daily memory cron setup
+7. Review and confirm
+
+**Output:**
+- Calls `create-agent.sh` with all flags
+- Customizes SOUL.md with user inputs
+- Creates agent ready to use
+
 ### create-agent.sh
+
+**Non-interactive, programmatic agent creation.**
 
 **Arguments:**
 - `--name` (required) - Agent name
@@ -366,6 +572,9 @@ python3 scripts/setup-channel.py --name channel-name --context "Purpose"
 - `--model` (required) - LLM to use (provider/model-name)
 - `--workspace` (required) - Where to create agent files
 - `--discord-channel` (optional) - Discord channel ID to bind
+- `--setup-cron` (optional) - yes|no (default: no)
+- `--cron-time` (optional) - HH:MM format (required if setup-cron=yes)
+- `--cron-tz` (optional) - Timezone (required if setup-cron=yes)
 
 **Output:**
 - Creates agent workspace
@@ -753,6 +962,54 @@ For larger multi-agent systems:
 5. **Set up memory cron jobs** - For agents with ongoing work
 6. **Test agents individually** - Before integrating into team
 7. **Update gateway config safely** - Always use config.patch, never manual edits
+
+## Conversational Flow Formatting (OpenClaw Agents)
+
+When handling agent creation conversationally in Discord/chat, follow these formatting rules:
+
+### Golden Rules
+
+1. **No fluff text** — Don't say "Got it! Let's do this!" Just ask the question.
+2. **Hide internal details** — Don't show the auto-generated ID. Users don't need it.
+3. **Bullet points for summary** — Use `**Label:** value` format, not tables.
+4. **Agent introduces itself** — After creation, agent tags user in its channel with greeting.
+
+### Example Summary Format
+
+**✅ Correct:**
+```
+**Name:** Aurelius 📚
+**Specialty:** Stoic philosopher and motivational guide
+**Style:** philosophical, contemplative
+**Model:** Claude Sonnet 4.5
+**Discord:** New #aurelius channel
+**Memory cron:** Daily at 9 PM EST
+```
+
+**❌ Wrong:**
+```
+┌──────────┬────────────────────┐
+│ Name     │ Aurelius 📚        │
+│ ID       │ aurelius           │  ← Don't show ID
+└──────────┴────────────────────┘
+```
+
+### Post-Creation Introduction
+
+After agent is created, it should introduce itself in its bound channel:
+
+```
+[In #aurelius channel]
+@don Greetings. I am Aurelius, your Stoic philosopher and guide. 📚
+
+I'm here to share wisdom from Marcus Aurelius, Seneca, and Epictetus.
+
+*"The impediment to action advances action. What stands in the way becomes the way."*
+
+Feel free to ask me anything about Stoic philosophy.
+```
+
+**See `CONVERSATIONAL-FORMAT.md` for complete formatting guide and implementation details.**
 
 ## Requirements
 
