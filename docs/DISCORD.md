@@ -7,7 +7,7 @@ Create, configure, and rename Discord channels for agent bindings.
 ### Quick Start
 
 ```bash
-python3 scripts/setup_channel.py \
+python3 scripts/setup-channel.py \
   --name research \
   --context "Deep research and competitive analysis"
 ```
@@ -15,7 +15,7 @@ python3 scripts/setup_channel.py \
 ### With Category
 
 ```bash
-python3 scripts/setup_channel.py \
+python3 scripts/setup-channel.py \
   --name research \
   --context "Deep research and competitive analysis" \
   --category-id "1234567890"
@@ -24,7 +24,7 @@ python3 scripts/setup_channel.py \
 ### Use Existing Channel
 
 ```bash
-python3 scripts/setup_channel.py \
+python3 scripts/setup-channel.py \
   --name personal-finance \
   --id 1466184336901537897 \
   --context "Personal finance management"
@@ -54,7 +54,7 @@ openclaw gateway config.patch --raw '{"channels": {...}}'
 ### Quick Start
 
 ```bash
-python3 scripts/rename_channel.py \
+python3 scripts/rename-channel.py \
   --id 1234567890 \
   --old-name old-name \
   --new-name new-name
@@ -65,7 +65,7 @@ python3 scripts/rename_channel.py \
 Updates references in workspace files:
 
 ```bash
-python3 scripts/rename_channel.py \
+python3 scripts/rename-channel.py \
   --id 1234567890 \
   --old-name old-name \
   --new-name new-name \
@@ -87,7 +87,7 @@ python3 scripts/rename_channel.py \
 
 ```bash
 # 1. Create Discord channel
-python3 scripts/setup_channel.py \
+python3 scripts/setup-channel.py \
   --name research \
   --context "Deep research and competitive analysis" \
   --category-id "1234567890"
@@ -200,7 +200,7 @@ Settings → Advanced → Developer Mode
 
 ```bash
 export DISCORD_CATEGORY_ID="1234567890"
-python3 scripts/setup_channel.py --name channel-name --context "Purpose"
+python3 scripts/setup-channel.py --name channel-name --context "Purpose"
 ```
 
 ---
