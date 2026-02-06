@@ -67,10 +67,10 @@ scripts/create-agent-interactive.sh
 
 | Doc | Description |
 |-----|-------------|
-| [WORKFLOWS.md](./WORKFLOWS.md) | Detailed workflow options (conversational, wizard, programmatic) |
-| [COORDINATION.md](./COORDINATION.md) | Multi-agent coordination patterns |
-| [DISCORD.md](./DISCORD.md) | Discord channel management |
-| [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Common issues and fixes |
+| [WORKFLOWS.md](./docs/WORKFLOWS.md) | Detailed workflow options (conversational, wizard, programmatic) |
+| [COORDINATION.md](./docs/COORDINATION.md) | Multi-agent coordination patterns |
+| [DISCORD.md](./docs/DISCORD.md) | Discord channel management |
+| [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Common issues and fixes |
 
 ## Agent Architecture
 
