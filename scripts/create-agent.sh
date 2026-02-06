@@ -340,6 +340,45 @@ if [[ "$SETUP_CRON" == "yes" ]]; then
   echo ""
 fi
 
+# 8. Send introduction message to Discord channel (if bound)
+if [[ -n "$DISCORD_CHANNEL" ]]; then
+  echo -e "${YELLOW}👋 Sending introduction message to Discord channel...${NC}"
+  
+  # Wait a moment for gateway restart to complete
+  sleep 3
+  
+  # Get the user ID from OpenClaw owner numbers (first owner)
+  # This is a simple approach - get it from config if available
+  OWNER_ID=$(openclaw gateway call config.get --json 2>/dev/null | jq -r '.parsed.owners[0] // empty')
+  
+  # Build introduction message with user tag
+  if [[ -n "$OWNER_ID" ]]; then
+    INTRO_MESSAGE="<@${OWNER_ID}> Hello! I'm **${NAME}** ${EMOJI}
+
+${SPECIALTY}
+
+I'm ready to help. Feel free to ask me anything!"
+  else
+    # Fallback without user tag if owner ID not found
+    INTRO_MESSAGE="Hello! I'm **${NAME}** ${EMOJI}
+
+${SPECIALTY}
+
+I'm ready to help. Feel free to ask me anything!"
+  fi
+  
+  # Send message via OpenClaw message tool
+  # Note: This requires the gateway to be restarted and the agent to be active
+  openclaw message send \
+    --channel discord \
+    --target "$DISCORD_CHANNEL" \
+    --message "$INTRO_MESSAGE" \
+    2>/dev/null || echo -e "${YELLOW}⚠️  Could not send introduction message (agent may need to restart first)${NC}"
+  
+  echo -e "${GREEN}✓ Introduction message sent${NC}"
+  echo ""
+fi
+
 # Summary
 echo -e "${GREEN}✅ Agent creation complete!${NC}"
 echo ""

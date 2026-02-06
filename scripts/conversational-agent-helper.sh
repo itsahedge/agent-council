@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_HANDLER="$SCRIPT_DIR/scripts/conversational-state.sh"
+STATE_HANDLER="$SCRIPT_DIR/conversational-state.sh"
 
 # Default session ID (can be overridden with --session-id)
 SESSION_ID="${AGENT_CREATION_SESSION_ID:-default}"
@@ -36,6 +36,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --execute|--create)
       "$STATE_HANDLER" execute "$SESSION_ID"
+      exit 0
+      ;;
+    yes|Yes|YES|"create agent"|"Create agent")
+      "$STATE_HANDLER" execute "$SESSION_ID"
+      exit 0
+      ;;
+    no|No|NO|cancel|Cancel)
+      "$STATE_HANDLER" cancel "$SESSION_ID"
       exit 0
       ;;
     *)
