@@ -15,7 +15,6 @@ import argparse
 import json
 import sys
 import os
-import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.request import Request, urlopen
