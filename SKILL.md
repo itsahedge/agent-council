@@ -98,7 +98,7 @@ Create agents through natural conversation - one question at a time.
 **Formatting Rules:**
 - **Number each question** (1., 2., 3., etc.) — helps users track progress
 - No fluff text ("Got it! Starting...") — just ask the question
-- Use (a), (b), (c) for sub-options (not numbered lists — Discord auto-formats those)
+- Use (a), (b), (c) for sub-options — no indentation (Discord strips it inconsistently)
 - Don't show the auto-generated ID — it's an internal detail  
 - Use bullet points for summary (not tables)
 - Agent should introduce itself in its bound channel after creation
@@ -138,9 +138,9 @@ You: philosophical, contemplative, uses ancient wisdom
 Agent: ✓ Style: philosophical, contemplative, uses ancient wisdom
        
        4. Which model should Aurelius use?
-          (a) opus — Claude Opus 4.5 (deep reasoning)
-          (b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
-          ...
+       (a) opus — Claude Opus 4.5 (deep reasoning)
+       (b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
+       ...
 ```
 
 **Features:**
