@@ -111,7 +111,7 @@ If nothing needs attention, reply HEARTBEAT_OK.
 
 Use `--id` flag to configure existing channel:
 ```bash
-python3 scripts/setup_channel.py \
+python3 scripts/setup-channel.py \
   --name existing-channel \
   --id 1234567890 \
   --context "Channel purpose"

@@ -90,8 +90,8 @@ agents/
 | `conversational-agent-helper.sh` | Chat-based agent creation |
 | `create-agent-interactive.sh` | Terminal wizard |
 | `create-agent.sh` | Programmatic creation |
-| `setup_channel.py` | Create Discord channels |
-| `rename_channel.py` | Rename Discord channels |
+| `setup-channel.py` | Create Discord channels |
+| `rename-channel.py` | Rename Discord channels |
 
 ## Requirements
 
