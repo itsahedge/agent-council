@@ -121,8 +121,57 @@ agents/
 **Cron jobs:**
 If your agent needs scheduled tasks:
 1. Create HEARTBEAT.md with execution logic
-2. Add cron jobs with `--session <agent-id>`
+2. Add cron jobs with `--agent-id <agent-id>` and appropriate session type
 3. Document in SOUL.md
+
+### Cron Session Types (Critical!)
+
+OpenClaw cron jobs have two session types. **Using the wrong type is a common mistake.**
+
+| Session Type | Payload Type | Has Conversation History? | Use Case |
+|--------------|--------------|---------------------------|----------|
+| `main` | `systemEvent` | ✅ Yes | Tasks needing conversation context |
+| `isolated` | `agentTurn` | ❌ No | Standalone tasks, fresh start |
+
+**Use `main` + `systemEvent` when:**
+- Memory updates (summarizing the day's conversations)
+- Daily reports/standups ("what did we work on?")
+- Anything referencing "today's activity" or "yesterday's conversations"
+- Tasks that need to know what the agent discussed with users
+
+**Use `isolated` + `agentTurn` when:**
+- Running scripts and posting output (digests, fetches)
+- Fetching external data (weather, prices, API calls)
+- Generating content from scratch (not based on conversations)
+- Self-contained tasks where fresh context is preferred
+
+**Examples:**
+```bash
+# ✅ CORRECT: Memory update (needs conversation history)
+openclaw cron add \
+  --name "Watson Daily Memory Update" \
+  --agent-id "watson" \
+  --cron "0 23 * * *" \
+  --tz "America/New_York" \
+  --session main \
+  --system-event "Review today's conversations and update memory file..."
+
+# ✅ CORRECT: Script execution (no history needed)
+openclaw cron add \
+  --name "Daily Digest" \
+  --agent-id "claire" \
+  --cron "0 9 * * *" \
+  --tz "America/New_York" \
+  --session isolated \
+  --agent-turn "Run the digest script and post results..."
+
+# ❌ WRONG: Memory update with isolated session
+# This will fail - isolated sessions can't see conversation history!
+--session isolated \
+--agent-turn "Review today's activity..."  # Can't review what it never saw
+```
+
+⚠️ **Common mistake:** Using `isolated` for memory updates. The agent wakes up with no context and can't summarize conversations it never saw!
 
 ### Examples
 
@@ -625,9 +674,31 @@ Watson posts detailed report in #research channel
 - Check gateway config bindings section
 - Restart gateway: `openclaw gateway restart`
 
+**⚠️ "Bindings lost after OpenClaw update/onboard"**
+The `openclaw onboard` wizard can reset or overwrite bindings. If agents stop responding after an update:
+1. Check bindings: `openclaw gateway config.get | jq '.bindings'`
+2. Re-add missing bindings via `config.patch`
+3. **Important:** The bindings array is REPLACED, not merged. Always include ALL existing bindings when patching.
+
 **"Model errors"**
 - Verify model name format: `provider/model-name`
 - Check model is available in gateway config
+
+**Cron Job Issues:**
+
+**"Memory update shows 'no activity' or empty summary"**
+- **Most common cause:** Using `isolated` session instead of `main`
+- Isolated sessions start fresh with no conversation history
+- **Fix:** Change to `--session main` with `--system-event "..."`
+- See "Cron Session Types" section above
+
+**"Cron job status: skipped, empty-heartbeat-file"**
+- Agent needs a HEARTBEAT.md file in its workspace
+- Create a minimal HEARTBEAT.md (see template in workspace)
+
+**"Cron job not running for agent"**
+- Verify `--agent-id <agent-id>` is set correctly
+- Check agent exists in gateway config: `openclaw gateway config.get | jq '.agents.list'`
 
 **Channel Management Issues:**
 
