@@ -23,11 +23,11 @@ Common issues and solutions for agent-council.
 
 ### "Wrong agent responding in channel" (binding order issue)
 
-**Symptom:** Main agent (e.g., Claire) responds instead of the specialized agent bound to a channel.
+**Symptom:** Your main agent responds instead of the specialized agent bound to a channel.
 
 **Cause:** OpenClaw evaluates bindings in order — first match wins. If there's a catch-all binding like:
 ```json
-{ "agentId": "claire", "match": { "channel": "discord" } }
+{ "agentId": "main-agent", "match": { "channel": "discord" } }
 ```
 ...and it appears BEFORE the specific channel binding, it matches first.
 
@@ -43,7 +43,7 @@ openclaw gateway config.patch --raw '{
   "bindings": [
     {"agentId": "forge", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "123..."}}},
     {"agentId": "watson", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "456..."}}},
-    {"agentId": "claire", "match": {"channel": "discord"}}
+    {"agentId": "main-agent", "match": {"channel": "discord"}}
   ]
 }'
 ```
