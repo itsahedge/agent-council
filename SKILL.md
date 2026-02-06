@@ -993,18 +993,22 @@ When handling agent creation conversationally in Discord/chat, follow these form
 
 ### Post-Creation Introduction
 
-After agent is created, it should introduce itself in its bound channel:
+After agent is created, it automatically sends an introduction message to its bound Discord channel, tagging the user:
 
 ```
-[In #aurelius channel]
-@don Greetings. I am Aurelius, your Stoic philosopher and guide. 📚
+[In #aurelius channel - sent automatically]
+@don Hello! I'm **Aurelius** 📚
 
-I'm here to share wisdom from Marcus Aurelius, Seneca, and Epictetus.
+Stoic philosopher and motivational guide
 
-*"The impediment to action advances action. What stands in the way becomes the way."*
-
-Feel free to ask me anything about Stoic philosophy.
+I'm ready to help. Feel free to ask me anything!
 ```
+
+The message automatically:
+- Tags the user with @mention using the first owner ID from OpenClaw config
+- Includes the agent's name and emoji
+- States the agent's specialty
+- Welcomes the user
 
 **See `CONVERSATIONAL-FORMAT.md` for complete formatting guide and implementation details.**
 

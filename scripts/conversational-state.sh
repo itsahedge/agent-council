@@ -1,536 +1,346 @@
 #!/bin/bash
 # Conversational agent creation state handler
 # Manages step-by-step Q&A flow for agent creation
+# Clean version: 6 questions only, tight formatting
 
 set -e
 
-# State file location (per user/session)
 STATE_DIR="${AGENT_COUNCIL_STATE_DIR:-$HOME/.openclaw/tmp/agent-creation}"
 mkdir -p "$STATE_DIR"
 
-# Colors for output
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-# Usage message
-usage() {
-  echo "Usage: $0 <command> [args]"
-  echo ""
-  echo "Commands:"
-  echo "  start <session-id>              Start new agent creation session"
-  echo "  answer <session-id> <answer>    Provide answer to current question"
-  echo "  status <session-id>             Get current state"
-  echo "  cancel <session-id>             Cancel session"
-  echo "  execute <session-id>            Execute agent creation (when complete)"
-  exit 1
-}
-
-# Get state file path for session
 get_state_file() {
-  local session_id="$1"
-  echo "$STATE_DIR/session-${session_id}.json"
+  echo "$STATE_DIR/session-${1}.json"
 }
 
-# Initialize new session
-cmd_start() {
-  local session_id="$1"
-  local state_file=$(get_state_file "$session_id")
-  
-  if [[ -f "$state_file" ]]; then
-    echo -e "${YELLOW}⚠️  Session already exists. Use 'cancel' first to start over.${NC}"
-    exit 1
-  fi
-  
-  # Create initial state
-  cat > "$state_file" <<EOF
-{
-  "session_id": "$session_id",
-  "step": "name",
-  "started": $(date +%s),
-  "data": {}
-}
-EOF
-  
-  echo -e "${GREEN}✨ Started agent creation session!${NC}"
-  echo ""
-  echo -e "${CYAN}What should we call this agent?${NC}"
-  echo -e "${YELLOW}Examples: Atlas, Watson, Picasso, Aurora${NC}"
-}
-
-# Auto-generate agent ID from name
 generate_id() {
-  local name="$1"
-  echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g'
+  echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g'
 }
 
-# Auto-pick emoji based on name
 pick_emoji() {
-  local name="$1"
-  local lower_name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
-  
+  local lower_name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
   case "$lower_name" in
-    *research*|*watson*) echo "🔬" ;;
-    *art*|*picasso*|*image*) echo "🎨" ;;
-    *health*|*nurse*|*medical*) echo "💊" ;;
-    *finance*|*money*) echo "💰" ;;
-    *code*|*dev*|*engineer*) echo "💻" ;;
-    *write*|*author*) echo "✍️" ;;
-    *music*) echo "🎵" ;;
-    *cook*|*chef*) echo "👨‍🍳" ;;
-    *stoic*|*philosophy*|*aurelius*) echo "📚" ;;
-    *crypto*|*blockchain*) echo "₿" ;;
-    *data*|*analytics*) echo "📊" ;;
-    *teach*|*tutor*) echo "🎓" ;;
-    *design*) echo "🎨" ;;
-    *marketing*) echo "📢" ;;
-    *legal*|*law*) echo "⚖️" ;;
-    *security*) echo "🔒" ;;
-    *game*) echo "🎮" ;;
-    *travel*) echo "✈️" ;;
-    *sports*|*fitness*) echo "💪" ;;
-    *weather*) echo "🌤️" ;;
-    *news*) echo "📰" ;;
-    *assistant*|*helper*) echo "🤖" ;;
+    # Specific names first (before patterns that might match substrings)
+    martha) echo "🌸" ;;
+    watson) echo "🔬" ;;
+    picasso) echo "🎨" ;;
+    aurelius) echo "📚" ;;
+    # Then keyword patterns
+    *research*|*science*|*analyze*) echo "🔬" ;;
+    *art*|*image*|*draw*|*design*) echo "🎨" ;;
+    *health*|*nurse*|*medical*|*doctor*) echo "💊" ;;
+    *finance*|*money*|*budget*) echo "💰" ;;
+    *code*|*dev*|*engineer*|*program*) echo "💻" ;;
+    *write*|*author*|*blog*) echo "✍️" ;;
+    *music*|*song*) echo "🎵" ;;
+    *cook*|*chef*|*recipe*|*food*|*kitchen*) echo "🌸" ;;
+    *stoic*|*philosophy*|*wisdom*) echo "📚" ;;
+    *crypto*|*blockchain*|*trading*) echo "₿" ;;
+    *data*|*analytics*|*stats*) echo "📊" ;;
+    *teach*|*tutor*|*learn*) echo "🎓" ;;
+    *fitness*|*gym*|*workout*) echo "💪" ;;
     *) echo "🤖" ;;
   esac
 }
 
-# Process answer for current step
+cmd_start() {
+  local state_file=$(get_state_file "$1")
+  [[ -f "$state_file" ]] && rm -f "$state_file"
+  cat > "$state_file" <<EOF
+{"session_id":"$1","step":"name","data":{}}
+EOF
+  echo "1. What should we call this agent? (e.g., Watson, Picasso, Aurelius)"
+}
+
 cmd_answer() {
   local session_id="$1"
   shift
   local answer="$*"
   local state_file=$(get_state_file "$session_id")
+  [[ ! -f "$state_file" ]] && { echo "No active session. Use --start first."; exit 1; }
   
-  if [[ ! -f "$state_file" ]]; then
-    echo -e "${RED}❌ No active session found. Use 'start' first.${NC}"
-    exit 1
-  fi
+  local step=$(jq -r '.step' "$state_file")
   
-  # Read current state
-  local current_step=$(jq -r '.step' "$state_file")
-  
-  # Process based on current step
-  case "$current_step" in
+  case "$step" in
     name)
-      # Store name, generate ID and emoji
       local agent_id=$(generate_id "$answer")
       local emoji=$(pick_emoji "$answer")
-      
-      jq --arg name "$answer" \
-         --arg id "$agent_id" \
-         --arg emoji "$emoji" \
-         '.data.name = $name | .data.id = $id | .data.emoji = $emoji | .step = "description"' \
+      jq --arg n "$answer" --arg i "$agent_id" --arg e "$emoji" \
+         '.data.name=$n|.data.id=$i|.data.emoji=$e|.step="specialty"' \
          "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Agent: $answer $emoji${NC}"
-      echo -e "${GREEN}✓ ID: $agent_id${NC}"
+      echo "✓ Agent: $answer $emoji"
       echo ""
-      echo -e "${CYAN}What does $answer do?${NC}"
-      echo -e "${YELLOW}Give me 1-2 sentences describing the agent's purpose.${NC}"
+      echo "2. What does $answer do? (1-2 sentences describing her specialty)"
       ;;
       
-    description)
-      # Store description
-      jq --arg desc "$answer" \
-         '.data.specialty = $desc | .step = "communication_style"' \
+    specialty)
+      jq --arg s "$answer" '.data.specialty=$s|.step="style"' \
          "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Specialty saved${NC}"
+      local name=$(jq -r '.data.name' "$state_file")
+      echo "✓ Specialty: $answer"
       echo ""
-      echo -e "${CYAN}What's the communication style?${NC}"
-      echo -e "${YELLOW}Examples: professional, casual, technical, friendly, philosophical${NC}"
-      echo -e "${YELLOW}Default: professional${NC}"
+      echo "3. What's ${name}'s communication style?"
+      echo "(a) Warm and encouraging — like a supportive grandma in the kitchen"
+      echo "(b) Professional and precise — clear instructions, exact measurements"
+      echo "(c) Casual and fun — playful, uses food puns, keeps it light"
+      echo "(d) Custom — describe your own"
       ;;
       
-    communication_style)
-      # Store comm style (or use default)
-      local style="${answer:-professional}"
-      
-      jq --arg style "$style" \
-         '.data.comm_style = $style | .step = "personality"' \
+    style)
+      local style=""
+      case "$answer" in
+        a|A) style="Warm and encouraging — like a supportive grandma in the kitchen" ;;
+        b|B) style="Professional and precise — clear instructions, exact measurements" ;;
+        c|C) style="Casual and fun — playful, uses food puns, keeps it light" ;;
+        d|D)
+          jq '.step="style_custom"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "Describe the communication style:"
+          return
+          ;;
+        *) style="$answer" ;;
+      esac
+      jq --arg s "$style" '.data.style=$s|.step="model"' \
          "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Communication style: $style${NC}"
+      local name=$(jq -r '.data.name' "$state_file")
+      echo "✓ Style: $style"
       echo ""
-      echo -e "${CYAN}Key personality traits?${NC}"
-      echo -e "${YELLOW}Examples: helpful, thorough, creative, wise, patient${NC}"
-      echo -e "${YELLOW}Default: helpful${NC}"
+      echo "4. Which model should $name use?"
+      echo "(a) opus — Claude Opus 4.5 (deep reasoning)"
+      echo "(b) sonnet — Claude Sonnet 4.5 (balanced) ⭐"
+      echo "(c) gemini — Gemini 3 Pro (Google)"
+      echo "(d) gemini-flash — Gemini 3 Flash (fast, lightweight)"
+      echo "(e) kimi — Kimi K2.5 (free, great for coding)"
       ;;
       
-    personality)
-      # Store personality
-      local traits="${answer:-helpful}"
-      
-      jq --arg traits "$traits" \
-         '.data.personality = $traits | .step = "model"' \
+    style_custom)
+      jq --arg s "$answer" '.data.style=$s|.step="model"' \
          "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Personality: $traits${NC}"
+      local name=$(jq -r '.data.name' "$state_file")
+      echo "✓ Style: $answer"
       echo ""
-      echo -e "${CYAN}Which model should this agent use?${NC}"
-      echo ""
-      echo "**1)** claude-opus-4-5 (Most capable, best for complex tasks)"
-      echo "**2)** claude-sonnet-4-5 (Balanced, great for most use cases) ⭐"
-      echo "**3)** gemini-3-flash-preview (Fast, good for simple tasks)"
-      echo "**4)** gemini-3-pro-preview (Google's best, strong reasoning)"
-      echo "**5)** Custom (you specify provider/model-name)"
-      echo ""
-      echo -e "${YELLOW}Enter number [2] or custom model:${NC}"
+      echo "4. Which model should $name use?"
+      echo "(a) opus — Claude Opus 4.5 (deep reasoning)"
+      echo "(b) sonnet — Claude Sonnet 4.5 (balanced) ⭐"
+      echo "(c) gemini — Gemini 3 Pro (Google)"
+      echo "(d) gemini-flash — Gemini 3 Flash (fast, lightweight)"
+      echo "(e) kimi — Kimi K2.5 (free, great for coding)"
       ;;
       
     model)
-      # Parse model choice
       local model=""
+      local model_display=""
       case "$answer" in
-        1) model="anthropic/claude-opus-4-5" ;;
-        2|"") model="anthropic/claude-sonnet-4-5" ;;
-        3) model="google/gemini-3-flash-preview" ;;
-        4) model="google/gemini-3-pro-preview" ;;
-        5)
-          echo -e "${CYAN}Enter custom model (provider/model-name):${NC}"
-          jq '.step = "model_custom"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          return
-          ;;
-        */*) model="$answer" ;;
-        *) model="anthropic/claude-sonnet-4-5" ;;
+        a|A) model="anthropic/claude-opus-4-5"; model_display="Claude Opus 4.5" ;;
+        b|B) model="anthropic/claude-sonnet-4-5"; model_display="Claude Sonnet 4.5" ;;
+        c|C) model="google/gemini-3-pro-preview"; model_display="Gemini 3 Pro" ;;
+        d|D) model="google/gemini-3-flash-preview"; model_display="Gemini 3 Flash" ;;
+        e|E) model="nvidia/kimi-k2.5"; model_display="Kimi K2.5" ;;
+        *) model="$answer"; model_display="$answer" ;;
       esac
-      
-      jq --arg model "$model" \
-         '.data.model = $model | .step = "workspace"' \
+      jq --arg m "$model" '.data.model=$m|.step="discord"' \
          "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Model: $model${NC}"
+      local name=$(jq -r '.data.name' "$state_file")
+      local id=$(jq -r '.data.id' "$state_file")
+      echo "✓ Model: $model_display"
       echo ""
-      
-      local agent_id=$(jq -r '.data.id' "$state_file")
-      local default_workspace="$HOME/clawd/agents/$agent_id"
-      
-      echo -e "${CYAN}Where should the agent's workspace be?${NC}"
-      echo -e "${YELLOW}Default: $default_workspace${NC}"
-      ;;
-      
-    model_custom)
-      # Store custom model
-      jq --arg model "$answer" \
-         '.data.model = $model | .step = "workspace"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Model: $answer${NC}"
-      echo ""
-      
-      local agent_id=$(jq -r '.data.id' "$state_file")
-      local default_workspace="$HOME/clawd/agents/$agent_id"
-      
-      echo -e "${CYAN}Where should the agent's workspace be?${NC}"
-      echo -e "${YELLOW}Default: $default_workspace${NC}"
-      ;;
-      
-    workspace)
-      # Store workspace
-      local agent_id=$(jq -r '.data.id' "$state_file")
-      local workspace="${answer:-$HOME/clawd/agents/$agent_id}"
-      workspace="${workspace/#\~/$HOME}"
-      
-      jq --arg workspace "$workspace" \
-         '.data.workspace = $workspace | .step = "discord"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Workspace: $workspace${NC}"
-      echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}Should $agent_name be bound to a Discord channel?${NC}"
-      echo ""
-      echo "**1)** Yes, use existing channel (provide channel name)"
-      echo "**2)** Yes, use existing channel (provide channel ID)"
-      echo "**3)** Yes, create a new channel"
-      echo "**4)** No, skip Discord binding"
-      echo ""
-      echo -e "${YELLOW}Enter number [4]:${NC}"
+      echo "5. Discord channel for $name?"
+      echo "(a) Create new #$id channel"
+      echo "(b) Use existing channel — provide name or ID"
+      echo "(c) No Discord channel — agent only accessible via sessions"
       ;;
       
     discord)
-      # Handle Discord choice
+      local name=$(jq -r '.data.name' "$state_file")
+      local id=$(jq -r '.data.id' "$state_file")
       case "$answer" in
-        1)
-          jq '.step = "discord_name"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          echo -e "${CYAN}Enter the Discord channel name (e.g., research, fitness):${NC}"
-          ;;
-        2)
-          jq '.step = "discord_id"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          echo -e "${CYAN}Enter the Discord channel ID:${NC}"
-          ;;
-        3)
-          jq '.step = "discord_new"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          echo -e "${CYAN}What should we call the new channel?${NC}"
-          ;;
-        4|"")
-          jq '.data.discord_channel = "" | .step = "skills"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          echo -e "${GREEN}✓ Skipping Discord binding${NC}"
+        a|A)
+          jq --arg c "$id" '.data.discord_new=$c|.step="cron"' \
+             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "✓ Discord: New #$id channel"
           echo ""
-          
-          local agent_name=$(jq -r '.data.name' "$state_file")
-          echo -e "${CYAN}What skills or tools should $agent_name use?${NC}"
-          echo -e "${YELLOW}Examples: web_search, browser, qmd, coding-agent${NC}"
-          echo -e "${YELLOW}Enter comma-separated list or 'none':${NC}"
+          echo "6. Set up daily memory cron? ($name will summarize her day's activity each night)"
+          echo "(a) Yes — 11:00 PM EST (recommended)"
+          echo "(b) Yes — custom time"
+          echo "(c) No — skip memory cron"
+          ;;
+        b|B)
+          jq '.step="discord_existing"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "Enter channel name or ID:"
+          ;;
+        c|C)
+          jq '.data.discord_channel=""|.step="cron"' \
+             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "✓ Discord: None (sessions only)"
+          echo ""
+          echo "6. Set up daily memory cron? ($name will summarize her day's activity each night)"
+          echo "(a) Yes — 11:00 PM EST (recommended)"
+          echo "(b) Yes — custom time"
+          echo "(c) No — skip memory cron"
           ;;
         *)
-          echo -e "${YELLOW}Invalid choice. Enter 1-4 [4]:${NC}"
+          echo "Please enter a, b, or c"
           ;;
       esac
       ;;
       
-    discord_name)
-      # Look up channel by name (this would need OpenClaw integration)
-      # For now, store and move forward
-      jq --arg channel "$answer" \
-         '.data.discord_channel_name = $channel | .step = "skills"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Will bind to channel: #$answer${NC}"
-      echo -e "${YELLOW}(Channel lookup will happen during creation)${NC}"
-      echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}What skills or tools should $agent_name use?${NC}"
-      echo -e "${YELLOW}Examples: web_search, browser, qmd, coding-agent${NC}"
-      echo -e "${YELLOW}Enter comma-separated list or 'none':${NC}"
-      ;;
-      
-    discord_id)
-      # Store channel ID
-      jq --arg channel "$answer" \
-         '.data.discord_channel = $channel | .step = "skills"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Channel ID: $answer${NC}"
-      echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}What skills or tools should $agent_name use?${NC}"
-      echo -e "${YELLOW}Examples: web_search, browser, qmd, coding-agent${NC}"
-      echo -e "${YELLOW}Enter comma-separated list or 'none':${NC}"
-      ;;
-      
-    discord_new)
-      # Store new channel name
-      jq --arg channel "$answer" \
-         '.data.discord_new_channel = $channel | .step = "skills"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      echo -e "${GREEN}✓ Will create channel: #$answer${NC}"
-      echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}What skills or tools should $agent_name use?${NC}"
-      echo -e "${YELLOW}Examples: web_search, browser, qmd, coding-agent${NC}"
-      echo -e "${YELLOW}Enter comma-separated list or 'none':${NC}"
-      ;;
-      
-    skills)
-      # Store skills
-      jq --arg skills "$answer" \
-         '.data.skills = $skills | .step = "boundaries"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      if [[ -n "$answer" ]] && [[ "$answer" != "none" ]]; then
-        echo -e "${GREEN}✓ Skills: $answer${NC}"
+    discord_existing)
+      local name=$(jq -r '.data.name' "$state_file")
+      # Check if it looks like a channel ID (all numbers) or name
+      if [[ "$answer" =~ ^[0-9]+$ ]]; then
+        jq --arg c "$answer" '.data.discord_channel=$c|.step="cron"' \
+           "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+        echo "✓ Discord: Channel ID $answer"
       else
-        echo -e "${GREEN}✓ No specific skills configured${NC}"
+        jq --arg c "$answer" '.data.discord_name=$c|.step="cron"' \
+           "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+        echo "✓ Discord: #$answer (will lookup ID)"
       fi
       echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}What should $agent_name NOT do?${NC}"
-      echo -e "${YELLOW}Examples: Don't make purchases, Don't send emails without approval${NC}"
-      echo -e "${YELLOW}Enter boundaries or 'none':${NC}"
-      ;;
-      
-    boundaries)
-      # Store boundaries
-      jq --arg boundaries "$answer" \
-         '.data.boundaries = $boundaries | .step = "cron"' \
-         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-      
-      if [[ -n "$answer" ]] && [[ "$answer" != "none" ]]; then
-        echo -e "${GREEN}✓ Boundaries: $answer${NC}"
-      else
-        echo -e "${GREEN}✓ No specific boundaries configured${NC}"
-      fi
-      echo ""
-      
-      local agent_name=$(jq -r '.data.name' "$state_file")
-      echo -e "${CYAN}Set up daily memory cron for $agent_name?${NC}"
-      echo -e "${YELLOW}Examples: 'everyday at 10PM EST', 'daily at 11:30PM PST'${NC}"
-      echo -e "${YELLOW}Enter schedule or 'none' to skip:${NC}"
+      echo "6. Set up daily memory cron? ($name will summarize her day's activity each night)"
+      echo "(a) Yes — 11:00 PM EST (recommended)"
+      echo "(b) Yes — custom time"
+      echo "(c) No — skip memory cron"
       ;;
       
     cron)
-      # Parse cron schedule
-      if [[ "$answer" == "none" ]] || [[ -z "$answer" ]]; then
-        jq '.data.setup_cron = "no" | .step = "complete"' \
-           "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-        
-        echo -e "${GREEN}✓ Skipping daily memory cron${NC}"
-      else
-        # Parse time and timezone
-        local time_part=$(echo "$answer" | grep -oE '[0-9]{1,2}(:[0-9]{2})?\s*(AM|PM|am|pm)' | head -1)
-        local tz_part=$(echo "$answer" | grep -oE '(EST|CST|MST|PST|EDT|CDT|MDT|PDT|America/[A-Za-z_]+|Europe/[A-Za-z_]+)' | head -1)
-        
-        if [[ -n "$time_part" ]]; then
-          # Convert to 24-hour
-          if [[ "$time_part" =~ ([0-9]{1,2}):?([0-9]{2})?\s*(AM|PM|am|pm) ]]; then
-            local hour="${BASH_REMATCH[1]}"
-            local minute="${BASH_REMATCH[2]:-00}"
-            local meridiem=$(echo "${BASH_REMATCH[3]}" | tr '[:lower:]' '[:upper:]')
-            
-            if [[ "$meridiem" == "PM" ]] && [[ "$hour" -ne 12 ]]; then
-              hour=$((hour + 12))
-            elif [[ "$meridiem" == "AM" ]] && [[ "$hour" -eq 12 ]]; then
-              hour=0
-            fi
-            
-            local cron_time=$(printf "%02d:%02d" $hour $minute)
-          fi
-          
-          # Map timezone
-          case "$tz_part" in
-            EST|EDT) local cron_tz="America/New_York" ;;
-            CST|CDT) local cron_tz="America/Chicago" ;;
-            MST|MDT) local cron_tz="America/Denver" ;;
-            PST|PDT) local cron_tz="America/Los_Angeles" ;;
-            *) local cron_tz="${tz_part:-America/New_York}" ;;
-          esac
-          
-          jq --arg cron_time "$cron_time" \
-             --arg cron_tz "$cron_tz" \
-             '.data.setup_cron = "yes" | .data.cron_time = $cron_time | .data.cron_tz = $cron_tz | .step = "complete"' \
-             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-          
-          echo -e "${GREEN}✓ Daily memory: $cron_time $cron_tz${NC}"
-        else
-          echo -e "${YELLOW}Couldn't parse time. Skipping cron setup.${NC}"
-          jq '.data.setup_cron = "no" | .step = "complete"' \
-             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-        fi
-      fi
-      
-      # Show summary
-      echo ""
-      echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-      echo -e "${GREEN}✅ Configuration Complete!${NC}"
-      echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-      echo ""
-      
-      # Read all data for summary
       local name=$(jq -r '.data.name' "$state_file")
-      local emoji=$(jq -r '.data.emoji' "$state_file")
-      local id=$(jq -r '.data.id' "$state_file")
-      local specialty=$(jq -r '.data.specialty' "$state_file")
-      local model=$(jq -r '.data.model' "$state_file")
-      local workspace=$(jq -r '.data.workspace' "$state_file")
-      local comm_style=$(jq -r '.data.comm_style' "$state_file")
-      local personality=$(jq -r '.data.personality' "$state_file")
+      case "$answer" in
+        a|A)
+          jq '.data.cron_time="23:00"|.data.cron_tz="America/New_York"|.step="complete"' \
+             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "✓ Memory cron: Daily at 11:00 PM EST"
+          show_summary "$state_file"
+          ;;
+        b|B)
+          jq '.step="cron_custom"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "What time should ${name}'s daily memory update run? (HH:MM in EST, e.g., 22:00)"
+          ;;
+        c|C)
+          jq '.data.cron_time=""|.step="complete"' \
+             "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+          echo "✓ Memory cron: Skipped"
+          show_summary "$state_file"
+          ;;
+        *)
+          echo "Please enter a, b, or c"
+          ;;
+      esac
+      ;;
       
-      echo -e "${CYAN}📋 Agent Summary:${NC}"
-      echo ""
-      echo -e "  ${YELLOW}Name:${NC} $name $emoji"
-      echo -e "  ${YELLOW}ID:${NC} $id"
-      echo -e "  ${YELLOW}Specialty:${NC} $specialty"
-      echo -e "  ${YELLOW}Model:${NC} $model"
-      echo -e "  ${YELLOW}Workspace:${NC} $workspace"
-      echo -e "  ${YELLOW}Communication Style:${NC} $comm_style"
-      echo -e "  ${YELLOW}Personality:${NC} $personality"
+    cron_custom)
+      # Parse time like "10PM EST" or "22:00"
+      local time_clean=$(echo "$answer" | tr '[:lower:]' '[:upper:]' | sed 's/[^0-9APMEST:]//g')
+      local hour=""
+      local minute="00"
       
-      if [[ $(jq -r '.data.discord_channel // empty' "$state_file") ]]; then
-        echo -e "  ${YELLOW}Discord Channel ID:${NC} $(jq -r '.data.discord_channel' "$state_file")"
+      if [[ "$answer" =~ ([0-9]{1,2}):([0-9]{2}) ]]; then
+        hour="${BASH_REMATCH[1]}"
+        minute="${BASH_REMATCH[2]}"
+      elif [[ "$time_clean" =~ ([0-9]{1,2})(PM|AM) ]]; then
+        hour="${BASH_REMATCH[1]}"
+        local meridiem="${BASH_REMATCH[2]}"
+        if [[ "$meridiem" == "PM" ]] && [[ "$hour" -ne 12 ]]; then
+          hour=$((hour + 12))
+        elif [[ "$meridiem" == "AM" ]] && [[ "$hour" -eq 12 ]]; then
+          hour=0
+        fi
+      else
+        hour=$(echo "$answer" | grep -oE '[0-9]{1,2}' | head -1)
       fi
       
-      if [[ $(jq -r '.data.skills // empty' "$state_file") ]] && [[ $(jq -r '.data.skills' "$state_file") != "none" ]]; then
-        echo -e "  ${YELLOW}Skills:${NC} $(jq -r '.data.skills' "$state_file")"
-      fi
-      
-      if [[ $(jq -r '.data.boundaries // empty' "$state_file") ]] && [[ $(jq -r '.data.boundaries' "$state_file") != "none" ]]; then
-        echo -e "  ${YELLOW}Boundaries:${NC} $(jq -r '.data.boundaries' "$state_file")"
-      fi
-      
-      if [[ $(jq -r '.data.setup_cron' "$state_file") == "yes" ]]; then
-        echo -e "  ${YELLOW}Daily Memory:${NC} $(jq -r '.data.cron_time' "$state_file") $(jq -r '.data.cron_tz' "$state_file")"
-      fi
-      
-      echo ""
-      echo -e "${CYAN}Ready to create! Run:${NC}"
-      echo -e "${GREEN}create agent${NC}"
+      local cron_time=$(printf "%02d:%02d" "$hour" "$minute")
+      jq --arg t "$cron_time" '.data.cron_time=$t|.data.cron_tz="America/New_York"|.step="complete"' \
+         "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
+      echo "✓ Memory cron: Daily at $cron_time EST"
+      show_summary "$state_file"
       ;;
       
     complete)
-      echo -e "${YELLOW}⚠️  Configuration already complete. Use 'create agent' to execute.${NC}"
-      ;;
-      
-    *)
-      echo -e "${RED}❌ Unknown step: $current_step${NC}"
-      exit 1
+      echo "Configuration complete. Say 'yes' to create the agent."
       ;;
   esac
 }
 
-# Get current status
-cmd_status() {
-  local session_id="$1"
-  local state_file=$(get_state_file "$session_id")
+show_summary() {
+  local state_file="$1"
+  local name=$(jq -r '.data.name' "$state_file")
+  local emoji=$(jq -r '.data.emoji' "$state_file")
+  local id=$(jq -r '.data.id' "$state_file")
+  local specialty=$(jq -r '.data.specialty' "$state_file")
+  local style=$(jq -r '.data.style' "$state_file")
+  local model=$(jq -r '.data.model' "$state_file")
+  local discord_new=$(jq -r '.data.discord_new // empty' "$state_file")
+  local discord_channel=$(jq -r '.data.discord_channel // empty' "$state_file")
+  local discord_name=$(jq -r '.data.discord_name // empty' "$state_file")
+  local cron_time=$(jq -r '.data.cron_time // empty' "$state_file")
   
-  if [[ ! -f "$state_file" ]]; then
-    echo -e "${RED}❌ No active session found.${NC}"
-    exit 1
+  # Format model display
+  local model_display="$model"
+  case "$model" in
+    anthropic/claude-opus-4-5) model_display="Claude Opus 4.5" ;;
+    anthropic/claude-sonnet-4-5) model_display="Claude Sonnet 4.5" ;;
+    google/gemini-3-pro-preview) model_display="Gemini 3 Pro" ;;
+    google/gemini-3-flash-preview) model_display="Gemini 3 Flash" ;;
+    nvidia/kimi-k2.5) model_display="Kimi K2.5" ;;
+  esac
+  
+  # Format Discord display
+  local discord_display=""
+  if [[ -n "$discord_new" ]]; then
+    discord_display="New #$discord_new channel"
+  elif [[ -n "$discord_channel" ]]; then
+    discord_display="Channel ID $discord_channel"
+  elif [[ -n "$discord_name" ]]; then
+    discord_display="#$discord_name"
+  else
+    discord_display="None"
   fi
   
-  jq '.' "$state_file"
-}
-
-# Cancel session
-cmd_cancel() {
-  local session_id="$1"
-  local state_file=$(get_state_file "$session_id")
-  
-  if [[ ! -f "$state_file" ]]; then
-    echo -e "${YELLOW}No active session to cancel.${NC}"
-    exit 0
+  # Format cron display
+  local cron_display="None"
+  if [[ -n "$cron_time" ]]; then
+    cron_display="Daily at $cron_time EST"
   fi
   
-  rm -f "$state_file"
-  echo -e "${GREEN}✓ Session cancelled${NC}"
+  echo ""
+  echo "---"
+  echo ""
+  echo "**Ready to create $name:**"
+  echo ""
+  echo "• **Name:** $name $emoji"
+  echo "• **Specialty:** $specialty"
+  echo "• **Style:** $style"
+  echo "• **Model:** $model_display"
+  echo "• **Discord:** $discord_display"
+  echo "• **Memory cron:** $cron_display"
+  echo "• **Workspace:** ~/clawd/agents/$id"
+  echo ""
+  echo "Create agent? (yes/no)"
 }
 
-# Execute agent creation
 cmd_execute() {
   local session_id="$1"
   local state_file=$(get_state_file "$session_id")
-  
-  if [[ ! -f "$state_file" ]]; then
-    echo -e "${RED}❌ No active session found.${NC}"
-    exit 1
-  fi
+  [[ ! -f "$state_file" ]] && { echo "No active session."; exit 1; }
   
   local step=$(jq -r '.step' "$state_file")
-  if [[ "$step" != "complete" ]]; then
-    echo -e "${RED}❌ Configuration not complete. Current step: $step${NC}"
-    exit 1
-  fi
+  [[ "$step" != "complete" ]] && { echo "Configuration not complete (step: $step)"; exit 1; }
   
-  # Read all configuration
   local name=$(jq -r '.data.name' "$state_file")
   local id=$(jq -r '.data.id' "$state_file")
   local emoji=$(jq -r '.data.emoji' "$state_file")
   local specialty=$(jq -r '.data.specialty' "$state_file")
+  local style=$(jq -r '.data.style' "$state_file")
   local model=$(jq -r '.data.model' "$state_file")
-  local workspace=$(jq -r '.data.workspace' "$state_file")
+  local workspace="$HOME/clawd/agents/$id"
+  local discord_new=$(jq -r '.data.discord_new // empty' "$state_file")
+  local discord_channel=$(jq -r '.data.discord_channel // empty' "$state_file")
+  local discord_name=$(jq -r '.data.discord_name // empty' "$state_file")
+  local cron_time=$(jq -r '.data.cron_time // empty' "$state_file")
+  local cron_tz=$(jq -r '.data.cron_tz // "America/New_York"' "$state_file")
   
-  # Build create-agent.sh command
   local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  
+  # Build command
   local cmd="$script_dir/create-agent.sh"
   cmd="$cmd --name \"$name\""
   cmd="$cmd --id \"$id\""
@@ -539,113 +349,54 @@ cmd_execute() {
   cmd="$cmd --model \"$model\""
   cmd="$cmd --workspace \"$workspace\""
   
-  # Optional Discord channel
-  local discord_channel=$(jq -r '.data.discord_channel // empty' "$state_file")
-  if [[ -n "$discord_channel" ]]; then
-    cmd="$cmd --discord-channel \"$discord_channel\""
-  fi
+  # Handle Discord - will be created/configured after agent creation
+  # Store for post-creation setup
   
   # Optional cron
-  local setup_cron=$(jq -r '.data.setup_cron // "no"' "$state_file")
-  if [[ "$setup_cron" == "yes" ]]; then
-    local cron_time=$(jq -r '.data.cron_time' "$state_file")
-    local cron_tz=$(jq -r '.data.cron_tz' "$state_file")
+  if [[ -n "$cron_time" ]]; then
     cmd="$cmd --setup-cron yes --cron-time \"$cron_time\" --cron-tz \"$cron_tz\""
   fi
   
-  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${GREEN}Creating agent...${NC}"
-  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo "Creating $name $emoji..."
   echo ""
   
-  # Execute
+  # Execute agent creation
   eval "$cmd"
   
-  # Enhance SOUL.md with context
+  # Update SOUL.md with style
   local soul_file="$workspace/SOUL.md"
-  if [[ -f "$soul_file" ]]; then
-    local comm_style=$(jq -r '.data.comm_style // empty' "$state_file")
-    local personality=$(jq -r '.data.personality // empty' "$state_file")
-    local skills=$(jq -r '.data.skills // empty' "$state_file")
-    local boundaries=$(jq -r '.data.boundaries // empty' "$state_file")
-    
-    # Update Personality section
-    if [[ -n "$comm_style" ]] || [[ -n "$personality" ]]; then
-      local personality_section="## Personality\n\n"
-      if [[ -n "$comm_style" ]]; then
-        personality_section+="**Communication style:** $comm_style\n\n"
-      fi
-      if [[ -n "$personality" ]]; then
-        personality_section+="**Key traits:** $personality\n\n"
-      fi
-      
-      sed -i '' "s|\[Define the agent's personality traits, communication style, and approach to work\]|$personality_section|g" "$soul_file"
-    fi
-    
-    # Update Skills section
-    if [[ -n "$skills" ]] && [[ "$skills" != "none" ]]; then
-      local skills_section="## Skills & Tools\n\n"
-      IFS=',' read -ra SKILLS_ARRAY <<< "$skills"
-      for skill in "${SKILLS_ARRAY[@]}"; do
-        skill=$(echo "$skill" | xargs)
-        skills_section+="- $skill\n"
-      done
-      
-      sed -i '' "s|\[List any skills or tools this agent should use\]|$skills_section|g" "$soul_file"
-    fi
-    
-    # Update Boundaries section
-    if [[ -n "$boundaries" ]] && [[ "$boundaries" != "none" ]]; then
-      local boundaries_section="## Boundaries\n\n$boundaries\n"
-      sed -i '' "s|\[Define what this agent should NOT do or when to ask for help\]|$boundaries_section|g" "$soul_file"
-    fi
-    
-    echo -e "${GREEN}✓ SOUL.md enhanced with your inputs${NC}"
+  if [[ -f "$soul_file" ]] && [[ -n "$style" ]]; then
+    sed -i '' "s|\[Define the agent's personality traits, communication style, and approach to work\]|**Communication style:** $style|g" "$soul_file" 2>/dev/null || true
   fi
   
-  # Clean up state file
+  # Store discord info for the calling agent to handle
+  echo ""
+  echo "DISCORD_NEW=$discord_new"
+  echo "DISCORD_CHANNEL=$discord_channel"
+  echo "DISCORD_NAME=$discord_name"
+  echo "AGENT_NAME=$name"
+  echo "AGENT_EMOJI=$emoji"
+  echo "AGENT_SPECIALTY=$specialty"
+  echo "AGENT_ID=$id"
+  
   rm -f "$state_file"
-  
-  echo ""
-  echo -e "${GREEN}╔════════════════════════════════════════════════════╗${NC}"
-  echo -e "${GREEN}║                                                    ║${NC}"
-  echo -e "${GREEN}║            ✅  Agent Created!  ✅                   ║${NC}"
-  echo -e "${GREEN}║                                                    ║${NC}"
-  echo -e "${GREEN}╚════════════════════════════════════════════════════╝${NC}"
-  echo ""
-  echo -e "${CYAN}🎉 $name $emoji is ready!${NC}"
 }
 
-# Main command router
-main() {
-  if [[ $# -lt 1 ]]; then
-    usage
-  fi
-  
-  local command="$1"
-  shift
-  
-  case "$command" in
-    start)
-      cmd_start "$@"
-      ;;
-    answer)
-      cmd_answer "$@"
-      ;;
-    status)
-      cmd_status "$@"
-      ;;
-    cancel)
-      cmd_cancel "$@"
-      ;;
-    execute)
-      cmd_execute "$@"
-      ;;
-    *)
-      echo -e "${RED}Unknown command: $command${NC}"
-      usage
-      ;;
-  esac
+cmd_status() {
+  local state_file=$(get_state_file "$1")
+  [[ -f "$state_file" ]] && jq '.' "$state_file" || echo "No active session"
 }
 
-main "$@"
+cmd_cancel() {
+  rm -f "$(get_state_file "$1")"
+  echo "Session cancelled"
+}
+
+case "$1" in
+  start) cmd_start "${2:-default}" ;;
+  answer) cmd_answer "${2:-default}" "${@:3}" ;;
+  status) cmd_status "${2:-default}" ;;
+  cancel) cmd_cancel "${2:-default}" ;;
+  execute) cmd_execute "${2:-default}" ;;
+  *) echo "Usage: $0 {start|answer|status|cancel|execute} [session-id] [answer]" ;;
+esac
