@@ -81,7 +81,7 @@ If nothing needs attention, reply HEARTBEAT_OK.
 
 ### "Cron job not running for agent"
 
-1. Verify `--agent-id` is correct:
+1. Verify `--agent` flag is correct:
    ```bash
    openclaw cron list
    ```

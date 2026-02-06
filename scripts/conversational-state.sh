@@ -79,18 +79,18 @@ cmd_answer() {
       echo "✓ Specialty: $answer"
       echo ""
       echo "3. What's ${name}'s communication style?"
-      echo "(a) Warm and encouraging — like a supportive grandma in the kitchen"
-      echo "(b) Professional and precise — clear instructions, exact measurements"
-      echo "(c) Casual and fun — playful, uses food puns, keeps it light"
+      echo "(a) Warm and encouraging — friendly, supportive, patient"
+      echo "(b) Professional and precise — clear, structured, thorough"
+      echo "(c) Casual and fun — playful, witty, keeps it light"
       echo "(d) Custom — describe your own"
       ;;
       
     style)
       local style=""
       case "$answer" in
-        a|A) style="Warm and encouraging — like a supportive grandma in the kitchen" ;;
-        b|B) style="Professional and precise — clear instructions, exact measurements" ;;
-        c|C) style="Casual and fun — playful, uses food puns, keeps it light" ;;
+        a|A) style="Warm and encouraging — friendly, supportive, patient" ;;
+        b|B) style="Professional and precise — clear, structured, thorough" ;;
+        c|C) style="Casual and fun — playful, witty, keeps it light" ;;
         d|D)
           jq '.step="style_custom"' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
           echo "Describe the communication style:"
