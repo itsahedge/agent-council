@@ -326,8 +326,11 @@ if [[ -n "$DISCORD_CHANNEL" ]]; then
 EOF
 )
   
-  # Merge bindings
-  ALL_BINDINGS=$(echo "$EXISTING_BINDINGS" | jq --argjson new "$NEW_BINDING" '. + [$new]')
+  # IMPORTANT: Prepend new binding (not append) so it matches BEFORE catch-all bindings
+  # OpenClaw evaluates bindings in order - first match wins
+  # Specific channel bindings must come BEFORE generic catch-all bindings like:
+  #   { "agentId": "main-agent", "match": { "channel": "discord" } }
+  ALL_BINDINGS=$(echo "$EXISTING_BINDINGS" | jq --argjson new "$NEW_BINDING" '[$new] + .')
   
   # Update config patch to include bindings
   CONFIG_PATCH=$(echo "$CONFIG_PATCH" | jq --argjson bindings "$ALL_BINDINGS" '. + {bindings: $bindings}')
