@@ -153,11 +153,11 @@ User: philosophical, contemplative, uses ancient wisdom
 Agent: ✓ Style: philosophical, contemplative, uses ancient wisdom
 
 4. Which model should Aurelius use?
-   a. opus — Claude Opus 4.5 (deep reasoning)
-   b. sonnet — Claude Sonnet 4.5 (balanced) ⭐
-   c. gemini — Gemini 3 Pro (fast)
-   d. gemini-flash — Gemini 3 Flash (fastest)
-   e. kimi — Kimi K2.5 (free, great for coding)
+   (a) opus — Claude Opus 4.5 (deep reasoning)
+   (b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
+   (c) gemini — Gemini 3 Pro (fast)
+   (d) gemini-flash — Gemini 3 Flash (fastest)
+   (e) kimi — Kimi K2.5 (free, great for coding)
 ```
 
 ### Step 5: Model
@@ -166,9 +166,9 @@ User: b
 Agent: ✓ Model: Claude Sonnet 4.5
 
 5. Discord channel for Aurelius?
-   a. Create a new #aurelius channel
-   b. Use an existing channel (provide name or ID)
-   c. No Discord channel (CLI/programmatic only)
+   (a) Create a new #aurelius channel
+   (b) Use an existing channel (provide name or ID)
+   (c) No Discord channel (CLI/programmatic only)
 ```
 
 ### Step 6: Discord
@@ -177,8 +177,8 @@ User: a
 Agent: ✓ Discord: Create new #aurelius channel
 
 6. Set up daily memory cron? This lets Aurelius review conversations and update its memory file at end of day.
-   a. Yes (recommended for agents with ongoing conversations)
-   b. No
+   (a) Yes (recommended for agents with ongoing conversations)
+   (b) No
 ```
 
 ### Step 7: Memory Cron
@@ -322,12 +322,12 @@ rm ~/.openclaw/tmp/agent-creation/session-$SESSION_ID.json
 ### Invalid Input
 Example: Model choice out of range
 ```
-User: 7
-Agent: Invalid choice. Please enter 1-5.
+User: z
+Agent: Invalid choice. Please enter a-e.
 
 Which model should Aurelius use?
-1. opus — Claude Opus 4.5 (deep reasoning)
-2. sonnet — Claude Sonnet 4.5 (balanced) ⭐
+(a) opus — Claude Opus 4.5 (deep reasoning)
+(b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
 ...
 ```
 
@@ -337,8 +337,8 @@ If channel name conflicts:
 Agent: ⚠️ Channel #aurelius already exists.
 
 Use existing channel or choose a different name?
-1. Use existing #aurelius
-2. Enter a different name
+(a) Use existing #aurelius
+(b) Enter a different name
 ```
 
 ## Testing

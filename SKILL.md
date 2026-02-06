@@ -139,8 +139,8 @@ You: philosophical, contemplative, uses ancient wisdom
 Agent: ✓ Style: philosophical, contemplative, uses ancient wisdom
        
        4. Which model should Aurelius use?
-          a. opus — Claude Opus 4.5 (deep reasoning)
-          b. sonnet — Claude Sonnet 4.5 (balanced) ⭐
+          (a) opus — Claude Opus 4.5 (deep reasoning)
+          (b) sonnet — Claude Sonnet 4.5 (balanced) ⭐
           ...
 ```
 
