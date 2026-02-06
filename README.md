@@ -49,7 +49,19 @@ openclaw gateway config.patch --raw '{
 
 ## Quick Start
 
-### Create an Agent
+### Conversational Usage
+
+To use agent-council through chat, **explicitly mention the skill name**:
+
+✅ Works:
+- "Create a new agent with agent-council"
+- "Using agent-council, create a new agent"
+- "Use agent-council to set up a research agent"
+
+❌ Doesn't work:
+- "Create a new agent" (too generic — skill won't be triggered)
+
+### Create an Agent (CLI)
 
 ```bash
 ~/.openclaw/skills/agent-council/scripts/create-agent.sh \
