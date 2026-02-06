@@ -21,6 +21,35 @@ Common issues and solutions for agent-council.
    openclaw gateway restart
    ```
 
+### "Wrong agent responding in channel" (binding order issue)
+
+**Symptom:** Main agent (e.g., Claire) responds instead of the specialized agent bound to a channel.
+
+**Cause:** OpenClaw evaluates bindings in order — first match wins. If there's a catch-all binding like:
+```json
+{ "agentId": "claire", "match": { "channel": "discord" } }
+```
+...and it appears BEFORE the specific channel binding, it matches first.
+
+**Fix:** Reorder bindings so specific channel bindings come BEFORE catch-all bindings:
+
+```bash
+# Get current bindings
+openclaw gateway config.get | jq '.bindings'
+
+# Manually reorder: specific bindings first, catch-all last
+# Then patch with the reordered array
+openclaw gateway config.patch --raw '{
+  "bindings": [
+    {"agentId": "forge", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "123..."}}},
+    {"agentId": "watson", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "456..."}}},
+    {"agentId": "claire", "match": {"channel": "discord"}}
+  ]
+}'
+```
+
+**Prevention:** The `create-agent.sh` script now prepends new bindings (instead of appending) to avoid this issue.
+
 ### "Bindings lost after OpenClaw update/onboard"
 
 The `openclaw onboard` wizard can reset bindings.
@@ -34,6 +63,8 @@ The `openclaw onboard` wizard can reset bindings.
 2. Re-add missing bindings via `config.patch`
 
 3. **Important:** The bindings array is REPLACED, not merged. Always include ALL existing bindings when patching.
+
+4. **Binding order matters!** Specific bindings must come BEFORE catch-all bindings. See "Wrong agent responding" above.
 
 ### "Model errors"
 
