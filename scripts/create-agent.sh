@@ -8,6 +8,38 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Track created resources for rollback
+CREATED_WORKSPACE=""
+CREATED_CRON_ID=""
+ROLLBACK_NEEDED=false
+
+# Cleanup function for error recovery
+cleanup_on_error() {
+  if [[ "$ROLLBACK_NEEDED" != "true" ]]; then
+    return
+  fi
+  
+  echo ""
+  echo -e "${RED}❌ Error occurred! Rolling back...${NC}"
+  
+  # Remove workspace if created
+  if [[ -n "$CREATED_WORKSPACE" ]] && [[ -d "$CREATED_WORKSPACE" ]]; then
+    echo -e "${YELLOW}  Removing workspace: $CREATED_WORKSPACE${NC}"
+    rm -rf "$CREATED_WORKSPACE"
+  fi
+  
+  # Remove cron job if created
+  if [[ -n "$CREATED_CRON_ID" ]]; then
+    echo -e "${YELLOW}  Removing cron job: $CREATED_CRON_ID${NC}"
+    openclaw cron remove --id "$CREATED_CRON_ID" 2>/dev/null || true
+  fi
+  
+  echo -e "${RED}Rollback complete. No partial agent left behind.${NC}"
+}
+
+# Set trap for cleanup on error
+trap cleanup_on_error ERR EXIT
+
 # Parse arguments
 NAME=""
 ID=""
@@ -99,10 +131,14 @@ fi
 echo -e "${BLUE}🤖 Creating agent: $NAME ($ID)${NC}"
 echo ""
 
+# Enable rollback tracking
+ROLLBACK_NEEDED=true
+
 # 1. Create workspace directory
 echo -e "${YELLOW}📁 Creating workspace directory...${NC}"
 mkdir -p "$WORKSPACE"
 mkdir -p "$WORKSPACE/memory"
+CREATED_WORKSPACE="$WORKSPACE"
 echo -e "${GREEN}✓ Created: $WORKSPACE${NC}"
 echo -e "${GREEN}✓ Created: $WORKSPACE/memory${NC}"
 echo ""
@@ -327,14 +363,18 @@ if [[ "$SETUP_CRON" == "yes" ]]; then
   # IMPORTANT: Memory updates MUST use --session main (not isolated) to access conversation history
   # --agent assigns the job to this agent
   # --session main gives access to the agent's conversation context
-  openclaw cron add \
+  CRON_RESULT=$(openclaw cron add \
     --name "$NAME Daily Memory Update" \
     --agent "$ID" \
     --cron "$MINUTE $HOUR * * *" \
     --tz "$CRON_TZ" \
     --session main \
     --system-event "End of day memory update: Review today's conversations and activity. Create/update $WORKSPACE/memory/\$(date +%Y-%m-%d).md with a comprehensive summary of: what you worked on, decisions made, progress on tasks, things learned, and any important context. Be thorough but concise. After updating, send a brief '☁️ Memory Updated' confirmation message to your Discord channel." \
-    --wake now
+    --wake now)
+  
+  # Extract cron job ID for potential rollback
+  CREATED_CRON_ID=$(echo "$CRON_RESULT" | jq -r '.id // empty' 2>/dev/null || true)
+  echo "$CRON_RESULT"
   
   echo -e "${GREEN}✓ Daily memory cron job created${NC}"
   echo ""
@@ -378,6 +418,9 @@ I'm ready to help. Feel free to ask me anything!"
   echo -e "${GREEN}✓ Introduction message sent${NC}"
   echo ""
 fi
+
+# Disable rollback - creation succeeded
+ROLLBACK_NEEDED=false
 
 # Summary
 echo -e "${GREEN}✅ Agent creation complete!${NC}"
