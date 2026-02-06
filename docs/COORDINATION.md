@@ -173,7 +173,7 @@ const results = Read("agents/watson/memory/research-X.md")
 ```
 User Request
     ↓
-Main Agent (Claire)
+Main Agent
     ↓
 sessions_send("watson", "Research X")
     ↓
