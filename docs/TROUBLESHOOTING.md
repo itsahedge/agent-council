@@ -21,6 +21,35 @@ Common issues and solutions for agent-council.
    openclaw gateway restart
    ```
 
+### "Wrong agent responding in channel" (binding order issue)
+
+**Symptom:** Your main agent responds instead of the specialized agent bound to a channel.
+
+**Cause:** OpenClaw evaluates bindings in order — first match wins. If there's a catch-all binding like:
+```json
+{ "agentId": "main-agent", "match": { "channel": "discord" } }
+```
+...and it appears BEFORE the specific channel binding, it matches first.
+
+**Fix:** Reorder bindings so specific channel bindings come BEFORE catch-all bindings:
+
+```bash
+# Get current bindings
+openclaw gateway config.get | jq '.bindings'
+
+# Manually reorder: specific bindings first, catch-all last
+# Then patch with the reordered array
+openclaw gateway config.patch --raw '{
+  "bindings": [
+    {"agentId": "forge", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "123..."}}},
+    {"agentId": "watson", "match": {"channel": "discord", "peer": {"kind": "channel", "id": "456..."}}},
+    {"agentId": "main-agent", "match": {"channel": "discord"}}
+  ]
+}'
+```
+
+**Prevention:** The `create-agent.sh` script now prepends new bindings (instead of appending) to avoid this issue.
+
 ### "Bindings lost after OpenClaw update/onboard"
 
 The `openclaw onboard` wizard can reset bindings.
@@ -34,6 +63,8 @@ The `openclaw onboard` wizard can reset bindings.
 2. Re-add missing bindings via `config.patch`
 
 3. **Important:** The bindings array is REPLACED, not merged. Always include ALL existing bindings when patching.
+
+4. **Binding order matters!** Specific bindings must come BEFORE catch-all bindings. See "Wrong agent responding" above.
 
 ### "Model errors"
 
@@ -154,6 +185,23 @@ apt install python3
 ---
 
 ## Gateway Config Issues
+
+### "Agents disappeared after config.patch" (CRITICAL)
+
+**Cause:** `config.patch` does shallow merge — **arrays get REPLACED, not merged**.
+
+If you patch with:
+```json
+{ "agents": { "list": [{ "id": "new-agent" }] } }
+```
+This **WIPES all existing agents** and replaces with just the new one!
+
+**Fix:**
+1. Get current config: `openclaw gateway config.get --json | jq '.parsed.agents.list'`
+2. Build new array with ALL existing agents + new agent
+3. Patch with the complete array
+
+**Prevention:** The `create-agent.sh` script handles this correctly — it reads existing agents and appends the new one before patching.
 
 ### "Config patch failed"
 
