@@ -362,12 +362,25 @@ if [[ "$SETUP_CRON" == "yes" ]]; then
   HOUR=$(echo "$CRON_TIME" | cut -d: -f1)
   MINUTE=$(echo "$CRON_TIME" | cut -d: -f2)
   
+  CRON_JOB_NAME="$NAME Daily Memory Update"
+  
+  # Check for existing cron job with same name/agent (prevent duplicates)
+  echo -e "${DIM}  Checking for existing cron jobs...${NC}"
+  EXISTING_CRON=$(openclaw cron list --json 2>/dev/null | jq -r --arg agent "$ID" --arg name "$CRON_JOB_NAME" \
+    '.jobs[] | select(.agentId == $agent and .name == $name) | .id' 2>/dev/null | head -1)
+  
+  if [[ -n "$EXISTING_CRON" ]]; then
+    echo -e "${YELLOW}  Found existing cron job: $EXISTING_CRON${NC}"
+    echo -e "${YELLOW}  Removing duplicate before creating new one...${NC}"
+    openclaw cron remove --id "$EXISTING_CRON" 2>/dev/null || true
+  fi
+  
   # Create cron job
   # IMPORTANT: Memory updates MUST use --session main (not isolated) to access conversation history
   # --agent assigns the job to this agent
   # --session main gives access to the agent's conversation context
   CRON_RESULT=$(openclaw cron add \
-    --name "$NAME Daily Memory Update" \
+    --name "$CRON_JOB_NAME" \
     --agent "$ID" \
     --cron "$MINUTE $HOUR * * *" \
     --tz "$CRON_TZ" \

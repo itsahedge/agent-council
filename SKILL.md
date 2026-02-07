@@ -83,6 +83,27 @@ agents/
 │       └── YYYY-MM-DD.md    # Daily logs
 ```
 
+## Cron Job Deduplication
+
+The `create-agent.sh` script automatically prevents duplicate cron jobs:
+
+1. Before creating a memory cron, it checks for existing jobs with the same `agentId` and `name`
+2. If a duplicate exists, it removes the old one first
+3. Then creates the new job
+
+**When manually creating cron jobs**, always follow this pattern:
+```bash
+# 1. Check for existing
+EXISTING=$(openclaw cron list --json | jq -r --arg agent "agent-id" --arg name "Job Name" \
+  '.jobs[] | select(.agentId == $agent and .name == $name) | .id' | head -1)
+
+# 2. Remove if exists
+[[ -n "$EXISTING" ]] && openclaw cron remove --id "$EXISTING"
+
+# 3. Then create
+openclaw cron add --name "Job Name" --agent "agent-id" ...
+```
+
 ## Scripts Reference
 
 | Script | Purpose |
