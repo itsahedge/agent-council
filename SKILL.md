@@ -35,8 +35,7 @@ Create and manage autonomous AI agents with full Discord integration.
   --emoji "🔬" \
   --specialty "Deep research and competitive analysis" \
   --create "research" \
-  --category "1467393991266799698" \
-  --cron "23:00"
+  --category "1467393991266799698"
 ```
 
 This will:
@@ -45,7 +44,7 @@ This will:
 - Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
 - Bind watson agent to #research
 - Add #research to allowlist
-- Create daily memory cron at 11:00 PM
+- **Create daily memory cron at 11:00 PM** (default, use `--no-cron` to skip)
 
 ### Create Agent with Existing Channel
 
@@ -118,7 +117,8 @@ Output:
 | `--create` | | Create new channel with this name |
 | `--category` | | Category ID for new channel |
 | `--topic` | | Channel topic (auto-generated if not set) |
-| `--cron` | | Daily memory cron time (e.g., "23:00") |
+| `--cron` | | Daily memory cron time (default: 23:00) |
+| `--no-cron` | | Skip daily memory cron setup |
 | `--tz` | | Timezone (default: America/New_York) |
 
 ## Architecture

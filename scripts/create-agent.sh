@@ -21,6 +21,8 @@ set -e
 MODEL="anthropic/claude-sonnet-4-5"
 TZ="America/New_York"
 GUILD_ID="620061358809022464"  # Don's server
+CRON_TIME="23:00"  # Default: daily memory at 11 PM
+SKIP_CRON=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --category) CATEGORY_ID="$2"; shift 2 ;;
     --topic) TOPIC="$2"; shift 2 ;;
     --cron) CRON_TIME="$2"; shift 2 ;;
+    --no-cron) SKIP_CRON=true; shift ;;
     --tz) TZ="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -58,7 +61,8 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo ""
   echo "Optional:"
   echo "  --model        Model (default: claude-sonnet-4-5)"
-  echo "  --cron         Daily memory cron time (e.g., '23:00')"
+  echo "  --cron         Daily memory cron time (default: 23:00)"
+  echo "  --no-cron      Skip daily memory cron setup"
   echo "  --tz           Timezone (default: America/New_York)"
   echo ""
   echo "Examples:"
@@ -227,9 +231,9 @@ openclaw gateway config.patch --raw "$(echo "$PATCH" | jq -c .)"
 echo "   ✓ Config applied"
 
 # ─────────────────────────────────────────────────────────────
-# 4. Cron job (optional)
+# 4. Daily memory cron (default: enabled)
 # ─────────────────────────────────────────────────────────────
-if [[ -n "$CRON_TIME" ]]; then
+if [[ "$SKIP_CRON" != "true" ]]; then
   echo ""
   echo "⏰ Setting up daily memory cron at $CRON_TIME $TZ..."
   
