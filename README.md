@@ -1,10 +1,10 @@
 # Agent Council
 
-**Lifecycle management for OpenClaw agents.**
+**Discord-integrated agent management for OpenClaw.**
 
-OpenClaw has built-in multi-agent support — routing, workspaces, bindings. But creating and managing agents requires manual config editing, careful array merging, and multiple setup steps.
+OpenClaw has built-in multi-agent support — routing, workspaces, bindings. But spinning up a Discord-connected agent requires manual config editing, channel creation, allowlist management, and careful array merging.
 
-Agent Council wraps all of that into simple commands.
+Agent Council handles the full Discord integration: create the channel, bind the agent, configure permissions, and set up daily memory — all in one command.
 
 ## What OpenClaw Provides
 
@@ -15,17 +15,26 @@ Agent Council wraps all of that into simple commands.
 
 ## What Agent Council Adds
 
-| Without Agent Council | With Agent Council |
-|-----------------------|-------------------|
-| `mkdir` + write SOUL.md + HEARTBEAT.md | One `--create` command |
-| Manually edit `agents.list` JSON | Automatic, safe merge |
-| Manually edit `bindings` array (easy to wipe) | Automatic, prepends correctly |
-| Manually add to Discord allowlist | Automatic |
-| Manually create Discord channel | `--create "channel-name"` |
-| Manually add memory cron | **Default** — every agent gets daily memory |
-| Multi-step cleanup to remove agent | `remove-agent.sh --delete-workspace --delete-channel` |
+### Discord Integration (Primary Focus)
 
-**The big one:** Agent Council makes **daily memory the default**. Every agent persists context about their work, learning from themselves over time.
+| Manual Setup | With Agent Council |
+|--------------|-------------------|
+| Create Discord channel via API | `--create "channel-name"` |
+| Set channel topic | Auto-generated from agent specialty |
+| Add to `discord.channels` allowlist | Automatic |
+| Edit `bindings` array (easy to wipe) | Safe merge, prepends correctly |
+| Place in category | `--category "id"` |
+
+### Agent Lifecycle
+
+| Manual Setup | With Agent Council |
+|--------------|-------------------|
+| `mkdir` + write SOUL.md + HEARTBEAT.md | One command |
+| Manually edit `agents.list` JSON | Automatic, safe merge |
+| Manually add memory cron | **Default** — every agent gets daily memory |
+| Multi-step cleanup | `remove-agent.sh --delete-workspace --delete-channel` |
+
+**The key value:** One command creates a Discord channel, binds an agent to it, configures permissions, and sets up persistent daily memory.
 
 ## Quick Start
 
