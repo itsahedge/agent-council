@@ -39,6 +39,13 @@ fi
 
 # Get current config
 CONFIG=$(openclaw gateway call config.get --json)
+
+# SAFETY: Validate config
+if ! echo "$CONFIG" | jq -e '.parsed' >/dev/null 2>&1; then
+  echo "✗ Failed to get config. Aborting."
+  exit 1
+fi
+
 BINDINGS=$(echo "$CONFIG" | jq -c '.parsed.bindings // []')
 CHANNELS=$(echo "$CONFIG" | jq -c '.parsed.discord.channels // {}')
 

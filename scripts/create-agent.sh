@@ -149,9 +149,23 @@ echo "⚙️  Updating gateway config..."
 
 # Get current config
 CONFIG=$(openclaw gateway call config.get --json)
+
+# SAFETY: Validate we got real config (prevent accidental wipes)
+if ! echo "$CONFIG" | jq -e '.parsed' >/dev/null 2>&1; then
+  echo "   ✗ Failed to get current config. Aborting to prevent data loss."
+  exit 1
+fi
+
 CURRENT_AGENTS=$(echo "$CONFIG" | jq -c '.parsed.agents.list // []')
 CURRENT_BINDINGS=$(echo "$CONFIG" | jq -c '.parsed.bindings // []')
 CURRENT_CHANNELS=$(echo "$CONFIG" | jq -c '.parsed.discord.channels // {}')
+
+# SAFETY: If we have agents but got empty array, something's wrong
+AGENT_COUNT=$(echo "$CURRENT_AGENTS" | jq 'length')
+if [[ "$AGENT_COUNT" -eq 0 ]]; then
+  echo "   ⚠ Warning: No existing agents found. If this is unexpected, Ctrl+C now."
+  sleep 2
+fi
 
 # Build new agent
 NEW_AGENT=$(jq -n \
