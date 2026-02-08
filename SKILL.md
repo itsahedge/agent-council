@@ -5,94 +5,161 @@ description: Create autonomous AI agents with Discord bindings. Use when setting
 
 # Agent Council
 
-Minimal toolkit for creating autonomous agents in OpenClaw.
-
-## Quick Start
-
-```bash
-~/.openclaw/skills/agent-council/scripts/create-agent.sh <id> <name> <emoji> <specialty> [model] [discord-channel-id]
-```
-
-**Example:**
-```bash
-./create-agent.sh watson Watson 🔬 "Deep research and analysis" anthropic/claude-opus-4-5 1468311503156281477
-```
+Create and manage autonomous AI agents with full Discord integration.
 
 ## What It Does
 
-1. Creates `~/clawd/agents/<id>/` with SOUL.md, HEARTBEAT.md, memory/
-2. Adds agent to gateway config (`agents.list`)
-3. Optionally binds to a Discord channel
+1. **Creates agent workspace** (SOUL.md, HEARTBEAT.md, memory/)
+2. **Creates Discord channel** (optional) with topic
+3. **Binds agent to channel** (routing)
+4. **Adds to allowlist** (permissions)
+5. **Sets up cron jobs** (optional daily memory)
 
-## Manual Alternative
+## Scripts
 
-You can also create agents manually:
+| Script | Purpose |
+|--------|---------|
+| `create-agent.sh` | Full agent setup with Discord integration |
+| `bind-channel.sh` | Bind existing agent to additional channel |
+| `list-agents.sh` | Show all agents and their Discord bindings |
+| `remove-agent.sh` | Remove agent (config, crons, optionally workspace/channel) |
+
+## Usage
+
+### Create Agent with New Discord Channel
+
+```bash
+~/.openclaw/skills/agent-council/scripts/create-agent.sh \
+  --id watson \
+  --name "Watson" \
+  --emoji "🔬" \
+  --specialty "Deep research and competitive analysis" \
+  --create "research" \
+  --category "1467393991266799698" \
+  --cron "23:00"
+```
+
+This will:
+- Create `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md
+- Create Discord #research channel in the agents category
+- Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
+- Bind watson agent to #research
+- Add #research to allowlist
+- Create daily memory cron at 11:00 PM
+
+### Create Agent with Existing Channel
+
+```bash
+./create-agent.sh \
+  --id sage \
+  --name "Sage" \
+  --emoji "💰" \
+  --specialty "Personal finance" \
+  --channel "1466184336901537897"
+```
+
+### Bind Agent to Additional Channel
+
+```bash
+./bind-channel.sh --agent forge --channel "1468805229196869747"
+./bind-channel.sh --agent forge --create "defi" --category "1466653402019659839"
+```
+
+### List Current Setup
+
+```bash
+./list-agents.sh
+```
+
+Output:
+```
+═══════════════════════════════════════════════════════════
+  Agent Council - Current Roster
+═══════════════════════════════════════════════════════════
+
+  🌙 Claire (claire) — anthropic/claude-opus-4-5
+  👔 Chief (chief) — anthropic/claude-opus-4-5
+  ⚒️ Forge (forge) — anthropic/claude-opus-4-5
+  ...
+
+───────────────────────────────────────────────────────────
+  Discord Bindings
+───────────────────────────────────────────────────────────
+
+  chief → #1465857663702138981
+  forge → #1465929800144126179
+  ...
+
+  Default (fallback): claire
+```
+
+### Remove Agent
+
+```bash
+# Remove from config only (keeps workspace)
+./remove-agent.sh --id test-agent
+
+# Full removal
+./remove-agent.sh --id test-agent --delete-workspace --delete-channel
+```
+
+## Options Reference
+
+### create-agent.sh
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--id` | ✓ | Agent ID (lowercase, no spaces) |
+| `--name` | ✓ | Display name |
+| `--emoji` | ✓ | Agent emoji |
+| `--specialty` | ✓ | What the agent does |
+| `--model` | | Model (default: claude-sonnet-4-5) |
+| `--channel` | | Existing Discord channel ID |
+| `--create` | | Create new channel with this name |
+| `--category` | | Category ID for new channel |
+| `--topic` | | Channel topic (auto-generated if not set) |
+| `--cron` | | Daily memory cron time (e.g., "23:00") |
+| `--tz` | | Timezone (default: America/New_York) |
+
+## Architecture
+
+```
+Gateway receives message
+       │
+       ▼
+Check bindings (first match wins)
+       │
+       ├─── match: route to bound agent
+       │
+       └─── no match: route to default agent
+```
+
+Bindings are **prepended** (not appended) so new specific bindings take priority over catch-all rules.
+
+## Manual Setup
+
+If you prefer manual setup:
 
 ```bash
 # 1. Create workspace
-mkdir -p ~/clawd/agents/<id>/memory
+mkdir -p ~/clawd/agents/myagent/memory
+# Write SOUL.md and HEARTBEAT.md
 
-# 2. Write SOUL.md and HEARTBEAT.md (see templates below)
-
-# 3. Patch gateway config
+# 2. Add to config
 openclaw gateway config.patch --raw '{
-  "agents": {
-    "list": [...existing agents..., {
-      "id": "<id>",
-      "name": "<Name>",
-      "workspace": "/path/to/workspace",
-      "model": {"primary": "anthropic/claude-sonnet-4-5"},
-      "identity": {"name": "<Name>", "emoji": "🔬"}
-    }]
-  }
+  "agents": { "list": [..., {"id": "myagent", ...}] },
+  "bindings": [{"agentId": "myagent", "match": {...}}, ...existing...],
+  "discord": { "channels": { "CHANNEL_ID": { "allow": true } } }
 }'
 ```
 
-## Templates
+## Discord Category IDs (Don's Server)
 
-### SOUL.md
-```markdown
-# SOUL.md - Name 🔬
-
-## Identity
-- **Name:** Name
-- **Emoji:** 🔬
-- **Role:** What this agent does
-
-## Personality
-Be helpful, concise, and proactive. Own your domain.
-
-## Guidelines
-- Read memory at session start
-- Write to memory as you work
-- Reply `HEARTBEAT_OK` when nothing needs attention
-```
-
-### HEARTBEAT.md
-```markdown
-# HEARTBEAT.md
-
-Handle scheduled cron jobs and system events only.
-If nothing needs attention, reply `HEARTBEAT_OK`.
-```
-
-## Adding Cron Jobs
-
-After creating an agent, add cron jobs separately:
-
-```bash
-openclaw cron add \
-  --name "Daily Memory Update" \
-  --cron "0 23 * * *" \
-  --tz "America/New_York" \
-  --session main \
-  --agent <id> \
-  --system-event "Review today's activity and update memory."
-```
-
-## Deleting Agents
-
-1. Remove from gateway config (patch with updated agents.list)
-2. Remove any bindings referencing the agent
-3. Remove cron jobs: `openclaw cron list` → `openclaw cron remove --id <job-id>`
-4. Optionally delete workspace: `rm -rf ~/clawd/agents/<id>`
+| Category | ID |
+|----------|-----|
+| Claire | 1465837398989471801 |
+| Agents | 1467393991266799698 |
+| Crypto | 1466653402019659839 |
+| Oku Money | 1467393835830214840 |
+| Perpetual Stack | 1467393038371520615 |
+| Main | 1467391773142941940 |
