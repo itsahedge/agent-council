@@ -1,127 +1,98 @@
 ---
 name: agent-council
-description: Complete toolkit for creating autonomous AI agents and managing Discord channels for OpenClaw. Use when setting up multi-agent systems, creating new agents, or managing Discord channel organization.
+description: Create autonomous AI agents with Discord bindings. Use when setting up new agents.
 ---
 
 # Agent Council
 
-Complete toolkit for creating and managing autonomous AI agents with Discord integration for OpenClaw.
-
-## What This Skill Does
-
-**Agent Creation:**
-- Creates autonomous AI agents with self-contained workspaces
-- Generates SOUL.md (personality) and HEARTBEAT.md (cron logic)
-- Sets up memory system and gateway config automatically
-- Binds agents to Discord channels (optional)
-- Sets up daily memory cron jobs (optional)
-
-**Discord Channel Management:**
-- Creates/renames Discord channels via API
-- Configures OpenClaw gateway allowlists
-- Sets channel-specific system prompts
-
-## Installation
-
-```bash
-# Install from ClawHub
-clawhub install agent-council
-
-# Or manual install
-cp -r . ~/.openclaw/skills/agent-council/
-openclaw gateway config.patch --raw '{
-  "skills": { "entries": { "agent-council": {"enabled": true} } }
-}'
-```
+Minimal toolkit for creating autonomous agents in OpenClaw.
 
 ## Quick Start
 
-### Conversational (Discord/Chat) — Recommended
+```bash
+~/.openclaw/skills/agent-council/scripts/create-agent.sh <id> <name> <emoji> <specialty> [model] [discord-channel-id]
+```
+
+**Example:**
+```bash
+./create-agent.sh watson Watson 🔬 "Deep research and analysis" anthropic/claude-opus-4-5 1468311503156281477
+```
+
+## What It Does
+
+1. Creates `~/clawd/agents/<id>/` with SOUL.md, HEARTBEAT.md, memory/
+2. Adds agent to gateway config (`agents.list`)
+3. Optionally binds to a Discord channel
+
+## Manual Alternative
+
+You can also create agents manually:
 
 ```bash
-./scripts/conversational-agent-helper.sh --start
+# 1. Create workspace
+mkdir -p ~/clawd/agents/<id>/memory
+
+# 2. Write SOUL.md and HEARTBEAT.md (see templates below)
+
+# 3. Patch gateway config
+openclaw gateway config.patch --raw '{
+  "agents": {
+    "list": [...existing agents..., {
+      "id": "<id>",
+      "name": "<Name>",
+      "workspace": "/path/to/workspace",
+      "model": {"primary": "anthropic/claude-sonnet-4-5"},
+      "identity": {"name": "<Name>", "emoji": "🔬"}
+    }]
+  }
+}'
 ```
 
-Creates agents through 6 simple questions:
-1. Name → 2. Specialty → 3. Style → 4. Model → 5. Discord → 6. Memory cron
+## Templates
 
-### Programmatic (Scripts/Automation)
+### SOUL.md
+```markdown
+# SOUL.md - Name 🔬
+
+## Identity
+- **Name:** Name
+- **Emoji:** 🔬
+- **Role:** What this agent does
+
+## Personality
+Be helpful, concise, and proactive. Own your domain.
+
+## Guidelines
+- Read memory at session start
+- Write to memory as you work
+- Reply `HEARTBEAT_OK` when nothing needs attention
+```
+
+### HEARTBEAT.md
+```markdown
+# HEARTBEAT.md
+
+Handle scheduled cron jobs and system events only.
+If nothing needs attention, reply `HEARTBEAT_OK`.
+```
+
+## Adding Cron Jobs
+
+After creating an agent, add cron jobs separately:
 
 ```bash
-scripts/create-agent.sh \
-  --name "Watson" --id "watson" --emoji "🔬" \
-  --specialty "Research and analysis" \
-  --model "anthropic/claude-sonnet-4-5" \
-  --workspace "$HOME/clawd/agents/watson" \
-  --discord-channel "1234567890" \
-  --setup-cron yes --cron-time "23:00" --cron-tz "America/New_York"
+openclaw cron add \
+  --name "Daily Memory Update" \
+  --cron "0 23 * * *" \
+  --tz "America/New_York" \
+  --session main \
+  --agent <id> \
+  --system-event "Review today's activity and update memory."
 ```
 
-### Interactive Wizard (Terminal)
+## Deleting Agents
 
-```bash
-scripts/create-agent-interactive.sh
-```
-
-## Documentation
-
-| Doc | Description |
-|-----|-------------|
-| [WORKFLOWS.md](./docs/WORKFLOWS.md) | Detailed workflow options (conversational, wizard, programmatic) |
-| [COORDINATION.md](./docs/COORDINATION.md) | Multi-agent coordination patterns |
-| [DISCORD.md](./docs/DISCORD.md) | Discord channel management |
-| [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Common issues and fixes |
-
-## Agent Architecture
-
-```
-agents/
-├── watson/
-│   ├── SOUL.md              # Personality and responsibilities
-│   ├── HEARTBEAT.md         # Cron execution logic
-│   └── memory/              # Agent-specific memory
-│       └── YYYY-MM-DD.md    # Daily logs
-```
-
-## Cron Job Deduplication
-
-The `create-agent.sh` script automatically prevents duplicate cron jobs:
-
-1. Before creating a memory cron, it checks for existing jobs with the same `agentId` and `name`
-2. If a duplicate exists, it removes the old one first
-3. Then creates the new job
-
-**When manually creating cron jobs**, always follow this pattern:
-```bash
-# 1. Check for existing
-EXISTING=$(openclaw cron list --json | jq -r --arg agent "agent-id" --arg name "Job Name" \
-  '.jobs[] | select(.agentId == $agent and .name == $name) | .id' | head -1)
-
-# 2. Remove if exists
-[[ -n "$EXISTING" ]] && openclaw cron remove --id "$EXISTING"
-
-# 3. Then create
-openclaw cron add --name "Job Name" --agent "agent-id" ...
-```
-
-## Scripts Reference
-
-| Script | Purpose |
-|--------|---------|
-| `conversational-agent-helper.sh` | Chat-based agent creation |
-| `create-agent-interactive.sh` | Terminal wizard |
-| `create-agent.sh` | Programmatic creation |
-| `setup-channel.py` | Create Discord channels |
-| `rename-channel.py` | Rename Discord channels |
-
-## Requirements
-
-- OpenClaw installed and configured
-- Node.js/npm via nvm
-- Python 3.6+ (standard library only)
-- Discord bot token (for channel management)
-
-## See Also
-
-- OpenClaw docs: https://docs.openclaw.ai
-- Multi-agent patterns: https://docs.openclaw.ai/agents
+1. Remove from gateway config (patch with updated agents.list)
+2. Remove any bindings referencing the agent
+3. Remove cron jobs: `openclaw cron list` → `openclaw cron remove --id <job-id>`
+4. Optionally delete workspace: `rm -rf ~/clawd/agents/<id>`

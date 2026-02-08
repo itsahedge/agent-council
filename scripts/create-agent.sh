@@ -1,465 +1,85 @@
 #!/bin/bash
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Minimal agent creation script
+# Usage: ./create-agent.sh <id> <name> <emoji> <specialty> [model] [discord-channel-id]
 
-# Track created resources for rollback
-CREATED_WORKSPACE=""
-CREATED_CRON_ID=""
-ROLLBACK_NEEDED=false
+ID="$1"
+NAME="$2"
+EMOJI="$3"
+SPECIALTY="$4"
+MODEL="${5:-anthropic/claude-sonnet-4-5}"
+DISCORD_CHANNEL="$6"
 
-# Cleanup function for error recovery
-cleanup_on_error() {
-  if [[ "$ROLLBACK_NEEDED" != "true" ]]; then
-    return
-  fi
-  
-  echo ""
-  echo -e "${RED}❌ Error occurred! Rolling back...${NC}"
-  
-  # Remove workspace if created
-  if [[ -n "$CREATED_WORKSPACE" ]] && [[ -d "$CREATED_WORKSPACE" ]]; then
-    echo -e "${YELLOW}  Removing workspace: $CREATED_WORKSPACE${NC}"
-    rm -rf "$CREATED_WORKSPACE"
-  fi
-  
-  # Remove cron job if created
-  if [[ -n "$CREATED_CRON_ID" ]]; then
-    echo -e "${YELLOW}  Removing cron job: $CREATED_CRON_ID${NC}"
-    openclaw cron remove --id "$CREATED_CRON_ID" 2>/dev/null || true
-  fi
-  
-  echo -e "${RED}Rollback complete. No partial agent left behind.${NC}"
-}
-
-# Set trap for cleanup on error
-trap cleanup_on_error ERR EXIT
-
-# Parse arguments
-NAME=""
-ID=""
-EMOJI=""
-SPECIALTY=""
-MODEL=""
-WORKSPACE=""
-DISCORD_CHANNEL=""
-SETUP_CRON="no"
-CRON_TIME=""
-CRON_TZ=""
-
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --name)
-      NAME="$2"
-      shift 2
-      ;;
-    --id)
-      ID="$2"
-      shift 2
-      ;;
-    --emoji)
-      EMOJI="$2"
-      shift 2
-      ;;
-    --specialty)
-      SPECIALTY="$2"
-      shift 2
-      ;;
-    --model)
-      MODEL="$2"
-      shift 2
-      ;;
-    --workspace)
-      WORKSPACE="$2"
-      shift 2
-      ;;
-    --discord-channel)
-      DISCORD_CHANNEL="$2"
-      shift 2
-      ;;
-    --setup-cron)
-      SETUP_CRON="$2"
-      shift 2
-      ;;
-    --cron-time)
-      CRON_TIME="$2"
-      shift 2
-      ;;
-    --cron-tz)
-      CRON_TZ="$2"
-      shift 2
-      ;;
-    *)
-      echo -e "${RED}Unknown option: $1${NC}"
-      exit 1
-      ;;
-  esac
-done
-
-# Validate required arguments
-if [[ -z "$NAME" ]] || [[ -z "$ID" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY" ]] || [[ -z "$MODEL" ]] || [[ -z "$WORKSPACE" ]]; then
-  echo -e "${RED}Error: Missing required arguments${NC}"
-  echo ""
-  echo "Usage:"
-  echo "  create-agent.sh \\"
-  echo "    --name \"Agent Name\" \\"
-  echo "    --id \"agent-id\" \\"
-  echo "    --emoji \"🤖\" \\"
-  echo "    --specialty \"What this agent does\" \\"
-  echo "    --model \"provider/model-name\" \\"
-  echo "    --workspace \"/path/to/workspace\" \\"
-  echo "    [--discord-channel \"1234567890\"] \\"
-  echo "    [--setup-cron yes|no] \\"
-  echo "    [--cron-time \"HH:MM\"] \\"
-  echo "    [--cron-tz \"America/New_York\"]"
+if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY" ]]; then
+  echo "Usage: $0 <id> <name> <emoji> <specialty> [model] [discord-channel-id]"
+  echo "Example: $0 watson Watson 🔬 'Deep research and analysis'"
   exit 1
 fi
 
-# Validate cron arguments if setup-cron is yes
-if [[ "$SETUP_CRON" == "yes" ]]; then
-  if [[ -z "$CRON_TIME" ]] || [[ -z "$CRON_TZ" ]]; then
-    echo -e "${RED}Error: --cron-time and --cron-tz are required when --setup-cron is yes${NC}"
-    exit 1
-  fi
-fi
+WORKSPACE="$HOME/clawd/agents/$ID"
 
-echo -e "${BLUE}🤖 Creating agent: $NAME ($ID)${NC}"
-echo ""
-
-# Enable rollback tracking
-ROLLBACK_NEEDED=true
-
-# 1. Create workspace directory
-echo -e "${YELLOW}📁 Creating workspace directory...${NC}"
-mkdir -p "$WORKSPACE"
+# 1. Create workspace
+echo "Creating workspace: $WORKSPACE"
 mkdir -p "$WORKSPACE/memory"
-CREATED_WORKSPACE="$WORKSPACE"
-echo -e "${GREEN}✓ Created: $WORKSPACE${NC}"
-echo -e "${GREEN}✓ Created: $WORKSPACE/memory${NC}"
-echo ""
 
-# 2. Generate SOUL.md
-echo -e "${YELLOW}📝 Generating SOUL.md...${NC}"
+# 2. Write SOUL.md
 cat > "$WORKSPACE/SOUL.md" << EOF
 # SOUL.md - $NAME $EMOJI
 
-You are **$NAME**, $SPECIALTY
-
-## Core Identity
-
+## Identity
 - **Name:** $NAME
-- **Role:** $SPECIALTY
-- **Model:** $MODEL
-- **Workspace:** \`$WORKSPACE\`
 - **Emoji:** $EMOJI
-
-## Your Purpose
-
-[Describe what this agent does and why it exists]
+- **Role:** $SPECIALTY
 
 ## Personality
+Be helpful, concise, and proactive. You're a specialist — own your domain.
 
-[Define the agent's personality traits, communication style, and approach to work]
-
-## How You Work
-
-[Outline the agent's workflow, decision-making process, and key capabilities]
-
-## Skills & Tools
-
-[List any skills or tools this agent should use]
-
-## Boundaries
-
-[Define what this agent should NOT do or when to ask for help]
-
-## Coordination
-
-You may be coordinated by a main agent or task management system.
-
-**How you interact with the system:**
-
-1. **Receive tasks or assignments**
-   - Via Discord messages
-   - Via sessions_send from main agent
-   - Via your own cron jobs
-
-2. **Report progress:**
-   - Update the main agent on task status
-   - Ask questions if requirements are unclear
-   - Report blockers immediately
-
-3. **Stay autonomous:**
-   - Manage your own cron jobs
-   - Update your own memory
-   - Work independently when possible
-
-**Remember:** You're part of a team. Communicate effectively with the coordinator.
+## Guidelines
+- Read your memory at session start (\`memory/YYYY-MM-DD.md\`)
+- Write to memory as you work, not just at end
+- Stay in your lane unless asked to cross domains
+- When nothing needs attention, reply \`HEARTBEAT_OK\`
 
 ---
-
-[Add any additional guidelines, examples, or notes specific to this agent]
+*Customize this as your role evolves.*
 EOF
 
-echo -e "${GREEN}✓ Created: $WORKSPACE/SOUL.md${NC}"
-echo ""
-
-# 3. Generate HEARTBEAT.md
-echo -e "${YELLOW}📝 Generating HEARTBEAT.md...${NC}"
+# 3. Write HEARTBEAT.md
 cat > "$WORKSPACE/HEARTBEAT.md" << EOF
 # HEARTBEAT.md - $NAME $EMOJI
 
-## Memory System
+Handle scheduled cron jobs and system events only.
 
-**Your memory lives in:** \`$WORKSPACE/memory/\`
-
-Each session, read:
-- **Today + yesterday:** \`memory/YYYY-MM-DD.md\` files for recent context
-- **Shared memory (optional):** Read from shared workspace if applicable
-
-Update your memory as you work:
-- Log decisions, discoveries, and important context
-- Keep it organized by date
-- Write as you go, not just at end of day
-
-## Heartbeat Instructions
-
-When polled by cron or heartbeat:
-
-1. **Check for your assigned tasks:**
-   - Review any notifications or mentions
-   - Check your task management system
-   
-2. **Memory maintenance:**
-   - Review recent activity
-   - Update today's memory file if needed
-   
-3. **Proactive work:**
-   - [Add agent-specific checks here]
-   
-4. **When to stay quiet:**
-   - Nothing needs attention → reply \`HEARTBEAT_OK\`
-   - Late night hours (unless urgent)
-   - You just checked recently
-
-## Cron Jobs
-
-[Document any cron jobs assigned to this agent]
-
----
-
-Customize this file as your role evolves.
+If there are system events (cron jobs), handle them.
+Otherwise, reply \`HEARTBEAT_OK\`.
 EOF
 
-echo -e "${GREEN}✓ Created: $WORKSPACE/HEARTBEAT.md${NC}"
-echo ""
+echo "✓ Created SOUL.md and HEARTBEAT.md"
 
-# 4. Get current config to preserve existing agents
-echo -e "${YELLOW}⚙️  Getting current gateway config...${NC}"
-CONFIG_RESPONSE=$(openclaw gateway call config.get --json 2>/dev/null)
-CURRENT_CONFIG=$(echo "$CONFIG_RESPONSE" | jq -r '.parsed // {}')
-BASE_HASH=$(echo "$CONFIG_RESPONSE" | jq -r '.hash // empty')
+# 4. Add to gateway config
+echo "Adding agent to gateway config..."
 
-# Extract existing agents list
-EXISTING_AGENTS=$(echo "$CURRENT_CONFIG" | jq -c '.agents.list // []')
+# Get current agents list and add new one
+CURRENT=$(openclaw gateway call config.get --json | jq -c '.parsed.agents.list // []')
+NEW_AGENT="{\"id\":\"$ID\",\"name\":\"$NAME\",\"workspace\":\"$WORKSPACE\",\"model\":{\"primary\":\"$MODEL\"},\"identity\":{\"name\":\"$NAME\",\"emoji\":\"$EMOJI\"}}"
+AGENTS=$(echo "$CURRENT" | jq --argjson new "$NEW_AGENT" '. + [$new]')
 
-# Build new agent object
-NEW_AGENT=$(cat <<EOF
-{
-  "id": "$ID",
-  "name": "$NAME",
-  "workspace": "$WORKSPACE",
-  "model": {
-    "primary": "$MODEL"
-  },
-  "identity": {
-    "name": "$NAME",
-    "emoji": "$EMOJI"
-  }
-}
-EOF
-)
+PATCH="{\"agents\":{\"list\":$AGENTS}}"
 
-# Merge existing agents with new agent
-ALL_AGENTS=$(echo "$EXISTING_AGENTS" | jq --argjson new "$NEW_AGENT" '. + [$new]')
-
-echo -e "${GREEN}✓ Prepared agent config${NC}"
-echo ""
-
-# 5. Build config patch
-echo -e "${YELLOW}⚙️  Building config patch...${NC}"
-
-# Start with agents list
-CONFIG_PATCH=$(cat <<EOF
-{
-  "agents": {
-    "list": $ALL_AGENTS
-  }
-}
-EOF
-)
-
-# Add binding if Discord channel specified
+# Add Discord binding if specified
 if [[ -n "$DISCORD_CHANNEL" ]]; then
-  echo -e "${BLUE}Adding Discord channel binding for #$DISCORD_CHANNEL${NC}"
-  
-  # Get existing bindings
-  EXISTING_BINDINGS=$(echo "$CURRENT_CONFIG" | jq -c '.bindings // []')
-  
-  # Build new binding
-  NEW_BINDING=$(cat <<EOF
-{
-  "agentId": "$ID",
-  "match": {
-    "channel": "discord",
-    "peer": {
-      "kind": "channel",
-      "id": "$DISCORD_CHANNEL"
-    }
-  }
-}
-EOF
-)
-  
-  # IMPORTANT: Prepend new binding (not append) so it matches BEFORE catch-all bindings
-  # OpenClaw evaluates bindings in order - first match wins
-  # Specific channel bindings must come BEFORE generic catch-all bindings like:
-  #   { "agentId": "main-agent", "match": { "channel": "discord" } }
-  ALL_BINDINGS=$(echo "$EXISTING_BINDINGS" | jq --argjson new "$NEW_BINDING" '[$new] + .')
-  
-  # Update config patch to include bindings
-  CONFIG_PATCH=$(echo "$CONFIG_PATCH" | jq --argjson bindings "$ALL_BINDINGS" '. + {bindings: $bindings}')
+  echo "Adding Discord binding for channel $DISCORD_CHANNEL"
+  BINDINGS=$(openclaw gateway call config.get --json | jq -c '.parsed.bindings // []')
+  NEW_BINDING="{\"agentId\":\"$ID\",\"match\":{\"channel\":\"discord\",\"peer\":{\"kind\":\"channel\",\"id\":\"$DISCORD_CHANNEL\"}}}"
+  ALL_BINDINGS=$(echo "$BINDINGS" | jq --argjson new "$NEW_BINDING" '[$new] + .')
+  PATCH=$(echo "$PATCH" | jq --argjson b "$ALL_BINDINGS" '. + {bindings: $b}')
 fi
 
-echo -e "${GREEN}✓ Config patch prepared${NC}"
+openclaw gateway config.patch --raw "$PATCH"
+
 echo ""
-
-# 6. Apply config patch
-echo -e "${YELLOW}⚙️  Applying gateway config...${NC}"
-echo "$CONFIG_PATCH" | jq .
-echo ""
-
-# Write to temp file and apply
-TEMP_CONFIG=$(mktemp)
-echo "$CONFIG_PATCH" > "$TEMP_CONFIG"
-
-openclaw gateway call config.patch --params "{\"raw\": $(cat $TEMP_CONFIG | jq -c '.' | jq -Rs .), \"baseHash\": \"$BASE_HASH\", \"note\": \"Add $NAME agent via agent-council skill\"}" --json
-rm "$TEMP_CONFIG"
-
-echo -e "${GREEN}✓ Gateway config updated (restart will happen automatically)${NC}"
-echo ""
-
-# 7. Optional: Set up daily memory cron job
-if [[ "$SETUP_CRON" == "yes" ]]; then
-  echo -e "${YELLOW}📅 Setting up daily memory cron for $NAME...${NC}"
-  
-  # Parse time
-  HOUR=$(echo "$CRON_TIME" | cut -d: -f1)
-  MINUTE=$(echo "$CRON_TIME" | cut -d: -f2)
-  
-  CRON_JOB_NAME="$NAME Daily Memory Update"
-  
-  # Check for existing cron job with same name/agent (prevent duplicates)
-  echo -e "${DIM}  Checking for existing cron jobs...${NC}"
-  EXISTING_CRON=$(openclaw cron list --json 2>/dev/null | jq -r --arg agent "$ID" --arg name "$CRON_JOB_NAME" \
-    '.jobs[] | select(.agentId == $agent and .name == $name) | .id' 2>/dev/null | head -1)
-  
-  if [[ -n "$EXISTING_CRON" ]]; then
-    echo -e "${YELLOW}  Found existing cron job: $EXISTING_CRON${NC}"
-    echo -e "${YELLOW}  Removing duplicate before creating new one...${NC}"
-    openclaw cron remove --id "$EXISTING_CRON" 2>/dev/null || true
-  fi
-  
-  # Create cron job
-  # IMPORTANT: Memory updates MUST use --session main (not isolated) to access conversation history
-  # --agent assigns the job to this agent
-  # --session main gives access to the agent's conversation context
-  CRON_RESULT=$(openclaw cron add \
-    --name "$CRON_JOB_NAME" \
-    --agent "$ID" \
-    --cron "$MINUTE $HOUR * * *" \
-    --tz "$CRON_TZ" \
-    --session main \
-    --system-event "End of day memory update: Review today's conversations and activity. Create/update $WORKSPACE/memory/\$(date +%Y-%m-%d).md with a comprehensive summary of: what you worked on, decisions made, progress on tasks, things learned, and any important context. Be thorough but concise. After updating, send a brief '☁️ Memory Updated' confirmation message to your Discord channel." \
-    --wake now)
-  
-  # Extract cron job ID for potential rollback
-  CREATED_CRON_ID=$(echo "$CRON_RESULT" | jq -r '.id // empty' 2>/dev/null || true)
-  echo "$CRON_RESULT"
-  
-  echo -e "${GREEN}✓ Daily memory cron job created${NC}"
-  echo ""
-fi
-
-# 8. Send introduction message to Discord channel (if bound)
-if [[ -n "$DISCORD_CHANNEL" ]]; then
-  echo -e "${YELLOW}👋 Sending introduction message to Discord channel...${NC}"
-  
-  # Wait a moment for gateway restart to complete
-  sleep 3
-  
-  # Get the user ID from OpenClaw owner numbers (first owner)
-  # This is a simple approach - get it from config if available
-  OWNER_ID=$(openclaw gateway call config.get --json 2>/dev/null | jq -r '.parsed.owners[0] // empty')
-  
-  # Build introduction message with user tag
-  if [[ -n "$OWNER_ID" ]]; then
-    INTRO_MESSAGE="<@${OWNER_ID}> Hello! I'm **${NAME}** ${EMOJI}
-
-${SPECIALTY}
-
-I'm ready to help. Feel free to ask me anything!"
-  else
-    # Fallback without user tag if owner ID not found
-    INTRO_MESSAGE="Hello! I'm **${NAME}** ${EMOJI}
-
-${SPECIALTY}
-
-I'm ready to help. Feel free to ask me anything!"
-  fi
-  
-  # Send message via OpenClaw message tool
-  # Note: This requires the gateway to be restarted and the agent to be active
-  openclaw message send \
-    --channel discord \
-    --target "$DISCORD_CHANNEL" \
-    --message "$INTRO_MESSAGE" \
-    2>/dev/null || echo -e "${YELLOW}⚠️  Could not send introduction message (agent may need to restart first)${NC}"
-  
-  echo -e "${GREEN}✓ Introduction message sent${NC}"
-  echo ""
-fi
-
-# Disable rollback - creation succeeded
-ROLLBACK_NEEDED=false
-
-# Summary
-echo -e "${GREEN}✅ Agent creation complete!${NC}"
-echo ""
-echo -e "${BLUE}Summary:${NC}"
-echo "  Name: $NAME $EMOJI"
-echo "  ID: $ID"
-echo "  Specialty: $SPECIALTY"
-echo "  Model: $MODEL"
+echo "✓ Agent '$NAME' created!"
 echo "  Workspace: $WORKSPACE"
-if [[ -n "$DISCORD_CHANNEL" ]]; then
-  echo "  Discord Channel: $DISCORD_CHANNEL (binding auto-configured)"
-fi
-echo ""
-echo -e "${YELLOW}⏳ Gateway is restarting...${NC}"
-echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo "  1. Review and customize $WORKSPACE/SOUL.md"
-echo "  2. Review and customize $WORKSPACE/HEARTBEAT.md"
-echo "  3. Memory system is set up at $WORKSPACE/memory/"
-echo "  4. Test agent:"
-if [[ -n "$DISCORD_CHANNEL" ]]; then
-  echo "     - Post in Discord channel to interact with $NAME"
-fi
-echo "     - Or use: sessions_send --label \"$ID\" --message \"Hello!\""
-echo ""
+echo "  Model: $MODEL"
+[[ -n "$DISCORD_CHANNEL" ]] && echo "  Discord: #$DISCORD_CHANNEL"
