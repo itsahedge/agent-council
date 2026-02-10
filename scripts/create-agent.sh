@@ -20,9 +20,11 @@ set -e
 # Defaults
 MODEL="anthropic/claude-sonnet-4-5"
 TZ="America/New_York"
-GUILD_ID="620061358809022464"  # Don's server
+GUILD_ID="${DISCORD_GUILD_ID:-}"
 CRON_TIME="23:00"  # Default: daily memory at 11 PM
 SKIP_CRON=false
+SKILL_DIR="$(dirname "$0")/.."
+WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/clawd/agents}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -39,6 +41,8 @@ while [[ $# -gt 0 ]]; do
     --cron) CRON_TIME="$2"; shift 2 ;;
     --no-cron) SKIP_CRON=true; shift ;;
     --tz) TZ="$2"; shift 2 ;;
+    --own-category) OWN_CATEGORY="$2"; shift 2 ;;
+    --guild-id) GUILD_ID="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -64,6 +68,12 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo "  --cron         Daily memory cron time (default: 23:00)"
   echo "  --no-cron      Skip daily memory cron setup"
   echo "  --tz           Timezone (default: America/New_York)"
+  echo "  --own-category Claim a category (auto-bind all channels in it)"
+  echo "  --guild-id     Discord server ID (or set DISCORD_GUILD_ID env var)"
+  echo ""
+  echo "Environment:"
+  echo "  DISCORD_GUILD_ID      Discord server ID (required for --create)"
+  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/clawd/agents)"
   echo ""
   echo "Examples:"
   echo "  $0 --id watson --name Watson --emoji 🔬 --specialty 'Deep research' --create research"
@@ -71,7 +81,7 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   exit 1
 fi
 
-WORKSPACE="$HOME/clawd/agents/$ID"
+WORKSPACE="$WORKSPACE_ROOT/$ID"
 
 echo "═══════════════════════════════════════════════════════════"
 echo "  Agent Council - Creating $NAME $EMOJI"
@@ -142,6 +152,10 @@ echo "   ✓ Created SOUL.md, HEARTBEAT.md, memory/"
 # 2. Discord channel (create or use existing)
 # ─────────────────────────────────────────────────────────────
 if [[ -n "$CREATE_CHANNEL" ]]; then
+  if [[ -z "$GUILD_ID" ]]; then
+    echo "   ✗ DISCORD_GUILD_ID not set. Use --guild-id or set the environment variable."
+    exit 1
+  fi
   echo ""
   echo "📺 Creating Discord channel #$CREATE_CHANNEL..."
   
@@ -268,17 +282,36 @@ if [[ "$SKIP_CRON" != "true" ]]; then
     '.jobs[] | select(.agentId == $agent and (.name | test("memory|Memory"))) | .id' | head -1)
   [[ -n "$EXISTING" ]] && openclaw cron remove --id "$EXISTING" >/dev/null 2>&1
   
-  # Create new cron
+  # Create new cron (isolated session + wakeMode now = actually executes)
   openclaw cron add \
-    --name "$NAME Daily Memory" \
+    --name "$NAME Daily Memory Update" \
     --cron "$MINUTE $HOUR * * *" \
     --tz "$TZ" \
-    --session main \
+    --session isolated \
     --agent "$ID" \
-    --system-event "End of day. Review today's activity and update memory/$(date +%Y-%m-%d).md with a summary of what happened, decisions made, and context for tomorrow." \
+    --wake now \
+    --agent-turn "End of day memory update: Review today's conversations and activity. Create/update memory/\$(date +%Y-%m-%d).md with a summary of: what was worked on, decisions made, progress, and context for tomorrow. After updating, confirm with '☁️ Memory Updated'." \
     >/dev/null 2>&1
   
   echo "   ✓ Cron job created"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 5. Category ownership (optional)
+# ─────────────────────────────────────────────────────────────
+if [[ -n "$OWN_CATEGORY" ]]; then
+  echo ""
+  echo "📂 Claiming category ownership..."
+  "$SKILL_DIR/scripts/claim-category.sh" --agent "$ID" --category "$OWN_CATEGORY" --sync
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 6. Update qmd index (agent memory becomes searchable)
+# ─────────────────────────────────────────────────────────────
+if command -v qmd &> /dev/null; then
+  echo ""
+  echo "🔍 Updating qmd index..."
+  qmd update >/dev/null 2>&1 && echo "   ✓ Agent memory now searchable via qmd"
 fi
 
 # ─────────────────────────────────────────────────────────────

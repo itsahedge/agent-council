@@ -23,24 +23,29 @@ Create and manage autonomous AI agents with full Discord integration.
 | `bind-channel.sh` | Bind existing agent to additional channel |
 | `list-agents.sh` | Show all agents and their Discord bindings |
 | `remove-agent.sh` | Remove agent (config, crons, optionally workspace/channel) |
+| `claim-category.sh` | Claim a Discord category for an agent |
+| `sync-category.sh` | Sync all channels in a category to its owner |
+| `list-categories.sh` | Show category ownership
 
 ## Usage
 
 ### Create Agent with New Discord Channel
 
 ```bash
+export DISCORD_GUILD_ID="123456789012345678"  # Your server ID
+
 ~/.openclaw/skills/agent-council/scripts/create-agent.sh \
   --id watson \
   --name "Watson" \
   --emoji "🔬" \
   --specialty "Deep research and competitive analysis" \
   --create "research" \
-  --category "1467393991266799698"
+  --category "987654321098765432"
 ```
 
 This will:
 - Create `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md
-- Create Discord #research channel in the agents category
+- Create Discord #research channel in the specified category
 - Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
 - Bind watson agent to #research
 - Add #research to allowlist
@@ -54,14 +59,14 @@ This will:
   --name "Sage" \
   --emoji "💰" \
   --specialty "Personal finance" \
-  --channel "1466184336901537897"
+  --channel "234567890123456789"
 ```
 
 ### Bind Agent to Additional Channel
 
 ```bash
-./bind-channel.sh --agent forge --channel "1468805229196869747"
-./bind-channel.sh --agent forge --create "defi" --category "1466653402019659839"
+./bind-channel.sh --agent forge --channel "345678901234567890"
+./bind-channel.sh --agent forge --create "defi" --category "456789012345678901"
 ```
 
 ### List Current Setup
@@ -76,7 +81,7 @@ Output:
   Agent Council - Current Roster
 ═══════════════════════════════════════════════════════════
 
-  🌙 Claire (claire) — anthropic/claude-opus-4-5
+  🤖 Main (main) — anthropic/claude-opus-4-5
   👔 Chief (chief) — anthropic/claude-opus-4-5
   ⚒️ Forge (forge) — anthropic/claude-opus-4-5
   ...
@@ -85,11 +90,11 @@ Output:
   Discord Bindings
 ───────────────────────────────────────────────────────────
 
-  chief → #1465857663702138981
-  forge → #1465929800144126179
+  chief → #123456789012345678
+  forge → #234567890123456789
   ...
 
-  Default (fallback): claire
+  Default (fallback): main
 ```
 
 ### Remove Agent
@@ -101,6 +106,40 @@ Output:
 # Full removal
 ./remove-agent.sh --id test-agent --delete-workspace --delete-channel
 ```
+
+### Category Ownership
+
+Agents can own Discord categories. Channels in owned categories can be auto-bound.
+
+```bash
+# Claim a category for an agent
+./claim-category.sh --agent chief --category 123456789012345678
+
+# Claim and immediately sync all existing channels
+./claim-category.sh --agent chief --category 123456789012345678 --sync
+
+# List category ownership
+./list-categories.sh
+
+# Sync channels in a category to the owner (re-run after adding new channels)
+./sync-category.sh --category 123456789012345678
+
+# Dry run (preview what would be bound)
+./sync-category.sh --category 123456789012345678 --dry-run
+```
+
+You can also claim a category during agent creation:
+
+```bash
+./create-agent.sh \
+  --id chief \
+  --name "Chief" \
+  --emoji "👔" \
+  --specialty "Leadership and strategy" \
+  --own-category "123456789012345678"
+```
+
+This claims the category AND binds all existing channels in it to the agent.
 
 ## Options Reference
 
@@ -120,6 +159,7 @@ Output:
 | `--cron` | | Daily memory cron time (default: 23:00) |
 | `--no-cron` | | Skip daily memory cron setup |
 | `--tz` | | Timezone (default: America/New_York) |
+| `--own-category` | | Claim a Discord category (auto-binds all channels) |
 
 ## Architecture
 
@@ -153,13 +193,36 @@ openclaw gateway config.patch --raw '{
 }'
 ```
 
-## Discord Category IDs (Don's Server)
+## Environment Variables
 
-| Category | ID |
-|----------|-----|
-| Claire | 1465837398989471801 |
-| Agents | 1467393991266799698 |
-| Crypto | 1466653402019659839 |
-| Oku Money | 1467393835830214840 |
-| Perpetual Stack | 1467393038371520615 |
-| Main | 1467391773142941940 |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
+| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
+
+## qmd Integration (Optional)
+
+If [qmd](https://github.com/tobi/qmd) is installed, agent-council automatically updates the index:
+- **Create:** Runs `qmd update` so new agent memory is immediately searchable
+- **Remove:** Runs `qmd update` to clean up removed agent files
+
+**Note:** qmd is optional. If not installed, these steps are skipped silently.
+
+When enabled, two-way search works:
+```bash
+# Main agent searches agent memory
+qmd search "topic" -c agents
+
+# Agents search brain  
+qmd search "topic" -c brain
+```
+
+Set up the agents collection: `qmd collection add ~/clawd/agents/ --name agents --mask "**/*.md"`
+
+## Finding Discord IDs
+
+To get category/channel IDs:
+1. Enable Developer Mode in Discord (User Settings → App Settings → Advanced)
+2. Right-click any channel or category → "Copy ID"
+
+Or use: `openclaw message channel-list --guildId YOUR_SERVER_ID`

@@ -43,6 +43,9 @@ Agent Council handles the full Discord integration: create the channel, bind the
 git clone https://github.com/itsahedge/agent-council.git ~/.openclaw/skills/agent-council
 openclaw gateway config.patch --raw '{"skills":{"entries":{"agent-council":{"enabled":true}}}}'
 
+# Set your Discord server ID
+export DISCORD_GUILD_ID="123456789012345678"
+
 # Create agent with Discord channel + daily memory (all automatic)
 ~/.openclaw/skills/agent-council/scripts/create-agent.sh \
   --id watson \
@@ -50,7 +53,7 @@ openclaw gateway config.patch --raw '{"skills":{"entries":{"agent-council":{"ena
   --emoji "🔬" \
   --specialty "Deep research" \
   --create "research" \
-  --category "1467393991266799698"
+  --category "987654321098765432"
 ```
 
 This creates:
@@ -68,6 +71,9 @@ This creates:
 | `bind-channel.sh` | Bind agent to additional channels |
 | `list-agents.sh` | Show all agents and their Discord bindings |
 | `remove-agent.sh` | Clean removal (config, crons, workspace, channel) |
+| `claim-category.sh` | Claim a Discord category for an agent |
+| `sync-category.sh` | Bind all channels in a category to its owner |
+| `list-categories.sh` | Show category ownership |
 
 ## Key Features
 
@@ -83,6 +89,33 @@ New bindings are **prepended** (not appended), so specific channel bindings take
 
 ### Daily Memory by Default
 Every agent gets a nightly cron that triggers memory consolidation. Agents learn from their work and build rich context over time. Use `--no-cron` to opt out.
+
+### Category Ownership
+Agents can own Discord categories. When you create new channels in an owned category, run `sync-category.sh` to auto-bind them:
+
+```bash
+# Claim a category for an agent
+./claim-category.sh --agent chief --category 123456789012345678 --sync
+
+# Later, after adding channels in Discord:
+./sync-category.sh --category 123456789012345678
+
+# See all owned categories
+./list-categories.sh
+```
+
+Or claim during agent creation:
+```bash
+./create-agent.sh --id chief --name Chief --emoji 👔 \
+  --specialty Leadership --own-category 123456789012345678
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
+| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
 
 ## Documentation
 
