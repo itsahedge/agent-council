@@ -52,3 +52,6 @@ htmlcov/
 # Temporary files
 *.tmp
 *.bak
+
+# Data files (contain server-specific IDs)
+data/

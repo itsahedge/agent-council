@@ -75,5 +75,10 @@ else
   echo "  Workspace preserved: $WORKSPACE"
 fi
 
+# Update qmd index
+if command -v qmd &> /dev/null; then
+  qmd update >/dev/null 2>&1 && echo "✓ Updated qmd index"
+fi
+
 echo ""
 echo "Done. Agent $ID removed."

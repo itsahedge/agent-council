@@ -4,7 +4,8 @@ set -e
 # Bind an agent to a Discord channel
 # Usage: ./bind-channel.sh --agent <id> --channel <id> [--topic "..."]
 
-GUILD_ID="620061358809022464"
+GUILD_ID="${DISCORD_GUILD_ID:-}"
+QUIET=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -13,6 +14,8 @@ while [[ $# -gt 0 ]]; do
     --create) CREATE_CHANNEL="$2"; shift 2 ;;
     --category) CATEGORY_ID="$2"; shift 2 ;;
     --topic) TOPIC="$2"; shift 2 ;;
+    --quiet|-q) QUIET=true; shift ;;
+    --guild-id) GUILD_ID="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -25,12 +28,16 @@ fi
 
 # Create channel if needed
 if [[ -n "$CREATE_CHANNEL" ]]; then
-  echo "Creating channel #$CREATE_CHANNEL..."
+  if [[ -z "$GUILD_ID" ]]; then
+    echo "✗ DISCORD_GUILD_ID not set. Use --guild-id or set the environment variable."
+    exit 1
+  fi
+  [[ "$QUIET" != "true" ]] && echo "Creating channel #$CREATE_CHANNEL..."
   CMD="openclaw message channel-create --name \"$CREATE_CHANNEL\" --guildId \"$GUILD_ID\""
   [[ -n "$CATEGORY_ID" ]] && CMD="$CMD --parentId \"$CATEGORY_ID\""
   RESULT=$(eval "$CMD --json")
   CHANNEL_ID=$(echo "$RESULT" | jq -r '.channel.id')
-  echo "Created: $CHANNEL_ID"
+  [[ "$QUIET" != "true" ]] && echo "Created: $CHANNEL_ID"
   
   if [[ -n "$TOPIC" ]]; then
     openclaw message channel-edit --channelId "$CHANNEL_ID" --topic "$TOPIC" >/dev/null 2>&1
@@ -71,4 +78,4 @@ PATCH=$(jq -n --argjson b "$BINDINGS" --argjson c "$CHANNELS" \
 
 openclaw gateway config.patch --raw "$(echo "$PATCH" | jq -c .)"
 
-echo "✓ Bound $AGENT_ID → #$CHANNEL_ID"
+[[ "$QUIET" != "true" ]] && echo "✓ Bound $AGENT_ID → #$CHANNEL_ID"
