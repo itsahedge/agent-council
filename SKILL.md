@@ -149,25 +149,27 @@ Use `sessionTarget: "isolated"` + `payload.kind: "agentTurn"`. The agent runs in
 - Set a reasonable `timeoutSeconds` (default 60 is often too tight for tool-using tasks — use 90-120)
 - Use `model` in the payload to override the agent's default model if needed (e.g., `"model": "sonnet"` for lighter tasks)
 
-### Creating a One-Shot Reminder
+### Creating a One-Shot Reminder (Posts to Discord)
 
-Use `sessionTarget: "main"` + `payload.kind: "systemEvent"` for reminders that fire into the agent's main session.
+Even for simple reminders, use `sessionTarget: "isolated"` + `agentTurn` so the reminder actually posts to your Discord channel:
 
 ```json
 {
   "name": "Reminder Name",
   "schedule": { "kind": "at", "at": "2026-02-14T12:00:00-05:00" },
-  "sessionTarget": "main",
+  "sessionTarget": "isolated",
   "payload": {
-    "kind": "systemEvent",
-    "text": "Reminder text that reads naturally when it fires."
+    "kind": "agentTurn",
+    "message": "Send a reminder to Discord using the message tool (action=send, channel=discord, target=channel:YOUR_CHANNEL_ID). Prepend <@OWNER_USER_ID>. Message: Your reminder text here.",
+    "timeoutSeconds": 60
   },
+  "delivery": { "mode": "none" },
   "deleteAfterRun": true,
   "enabled": true
 }
 ```
 
-**Note:** Main-session jobs require `HEARTBEAT.md` to exist in the agent's workspace.
+**⚠️ Do NOT use `sessionTarget: "main"` + `systemEvent` for anything that should appear in Discord.** SystemEvents fire silently into the agent's session context — they do NOT post to any channel. If a user should see it, it MUST be an isolated agentTurn with explicit message tool delivery.
 
 ### Silent Cron Jobs (No Discord Post)
 
