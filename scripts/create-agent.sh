@@ -133,6 +133,9 @@ Brief note about what happened, what was decided, or what was learned.
 
 The nightly memory cron is for **consolidation**, not primary writing. Capture important moments as they happen.
 
+## Cron Jobs
+Before creating any cron job or reminder, read the cron job rules in your workspace (e.g., \`brain/principles/cron-jobs.md\`). Key rule: always use \`sessionTarget: "isolated"\` + \`agentTurn\` + \`delivery.mode: "none"\`, and explicitly send to Discord via the message tool in the payload. Never use \`systemEvent\` or \`delivery.mode: "announce"\` for reminders.
+
 ---
 *Customize this as your role evolves.*
 EOF
