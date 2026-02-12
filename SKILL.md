@@ -1,6 +1,6 @@
 ---
 name: agent-council
-description: Create autonomous AI agents with Discord bindings. Use when setting up new agents.
+description: Create autonomous AI agents with Discord bindings. Use when setting up new agents, managing agent cron jobs, or scheduling agent tasks. Covers agent creation, channel binding, cron job patterns, and delivery routing.
 ---
 
 # Agent Council
@@ -44,7 +44,7 @@ export DISCORD_GUILD_ID="123456789012345678"  # Your server ID
 ```
 
 This will:
-- Create `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md
+- Create `~/workspace/agents/watson/` with SOUL.md, HEARTBEAT.md
 - Create Discord #research channel in the specified category
 - Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
 - Bind watson agent to #research
@@ -75,28 +75,6 @@ This will:
 ./list-agents.sh
 ```
 
-Output:
-```
-═══════════════════════════════════════════════════════════
-  Agent Council - Current Roster
-═══════════════════════════════════════════════════════════
-
-  🤖 Main (main) — anthropic/claude-opus-4-5
-  👔 Chief (chief) — anthropic/claude-opus-4-5
-  ⚒️ Forge (forge) — anthropic/claude-opus-4-5
-  ...
-
-───────────────────────────────────────────────────────────
-  Discord Bindings
-───────────────────────────────────────────────────────────
-
-  chief → #123456789012345678
-  forge → #234567890123456789
-  ...
-
-  Default (fallback): main
-```
-
 ### Remove Agent
 
 ```bash
@@ -121,25 +99,111 @@ Agents can own Discord categories. Channels in owned categories can be auto-boun
 # List category ownership
 ./list-categories.sh
 
-# Sync channels in a category to the owner (re-run after adding new channels)
+# Sync channels in a category to the owner
 ./sync-category.sh --category 123456789012345678
-
-# Dry run (preview what would be bound)
-./sync-category.sh --category 123456789012345678 --dry-run
 ```
 
-You can also claim a category during agent creation:
+---
 
-```bash
-./create-agent.sh \
-  --id chief \
-  --name "Chief" \
-  --emoji "👔" \
-  --specialty "Leadership and strategy" \
-  --own-category "123456789012345678"
+## Agent Cron Jobs
+
+Agents can create and manage their own cron jobs. **Follow these patterns exactly** to ensure messages route to the correct Discord channel.
+
+### ⚠️ CRITICAL: Delivery Pattern
+
+**NEVER use `delivery.mode: "announce"`** — it misroutes messages (e.g., to Telegram instead of Discord). The `delivery.channel` field expects a *platform name* (like "discord"), not a channel ID. Putting a channel ID there causes unpredictable fallback routing.
+
+**ALWAYS use this pattern:**
+
+```json
+{
+  "delivery": { "mode": "none" }
+}
 ```
 
-This claims the category AND binds all existing channels in it to the agent.
+Then have the job payload explicitly send to Discord using the **message tool**. This is how every working cron job operates.
+
+### Creating a Cron Job That Posts to Discord
+
+Use `sessionTarget: "isolated"` + `payload.kind: "agentTurn"`. The agent runs in a fresh session, does its work, and sends the result to its bound channel via the message tool.
+
+```json
+{
+  "name": "My Scheduled Task",
+  "schedule": { "kind": "cron", "expr": "0 9 * * *", "tz": "America/New_York" },
+  "sessionTarget": "isolated",
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Do the task. Then send the result to Discord using the message tool (action=send, channel=discord, target=channel:YOUR_CHANNEL_ID). Prepend <@OWNER_USER_ID>.",
+    "timeoutSeconds": 90
+  },
+  "delivery": { "mode": "none" },
+  "enabled": true
+}
+```
+
+**Key rules:**
+- `delivery.mode` MUST be `"none"` — the payload handles its own delivery
+- Include the Discord channel ID in the payload message text
+- Include the owner's user ID for mentions
+- Set a reasonable `timeoutSeconds` (default 60 is often too tight for tool-using tasks — use 90-120)
+- Use `model` in the payload to override the agent's default model if needed (e.g., `"model": "sonnet"` for lighter tasks)
+
+### Creating a One-Shot Reminder
+
+Use `sessionTarget: "main"` + `payload.kind: "systemEvent"` for reminders that fire into the agent's main session.
+
+```json
+{
+  "name": "Reminder Name",
+  "schedule": { "kind": "at", "at": "2026-02-14T12:00:00-05:00" },
+  "sessionTarget": "main",
+  "payload": {
+    "kind": "systemEvent",
+    "text": "Reminder text that reads naturally when it fires."
+  },
+  "deleteAfterRun": true,
+  "enabled": true
+}
+```
+
+**Note:** Main-session jobs require `HEARTBEAT.md` to exist in the agent's workspace.
+
+### Silent Cron Jobs (No Discord Post)
+
+For maintenance tasks (memory compaction, index updates), use `delivery: { mode: "none" }` and don't include message tool instructions in the payload:
+
+```json
+{
+  "name": "Nightly Maintenance",
+  "schedule": { "kind": "cron", "expr": "0 23 * * *", "tz": "America/New_York" },
+  "sessionTarget": "isolated",
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Run maintenance task. If nothing to do, reply HEARTBEAT_OK."
+  },
+  "delivery": { "mode": "none" },
+  "enabled": true
+}
+```
+
+### Heartbeat vs Cron
+
+| Use Heartbeat When | Use Cron When |
+|---------------------|---------------|
+| Multiple checks can batch together | Exact timing matters |
+| Need recent conversation context | Task needs isolation |
+| Timing can drift (~30 min is fine) | Want a different model |
+| Reducing API calls by combining | One-shot reminders |
+
+### Managing Existing Cron Jobs
+
+Before creating, always check for duplicates:
+1. `cron action=list` — list all jobs
+2. Look for similar names/purposes
+3. **Update** existing jobs instead of creating duplicates
+
+---
 
 ## Options Reference
 
@@ -176,48 +240,18 @@ Check bindings (first match wins)
 
 Bindings are **prepended** (not appended) so new specific bindings take priority over catch-all rules.
 
-## Manual Setup
-
-If you prefer manual setup:
-
-```bash
-# 1. Create workspace
-mkdir -p ~/clawd/agents/myagent/memory
-# Write SOUL.md and HEARTBEAT.md
-
-# 2. Add to config
-openclaw gateway config.patch --raw '{
-  "agents": { "list": [..., {"id": "myagent", ...}] },
-  "bindings": [{"agentId": "myagent", "match": {...}}, ...existing...],
-  "discord": { "channels": { "CHANNEL_ID": { "allow": true } } }
-}'
-```
-
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
-| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
+| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/workspace/agents`) |
 
 ## qmd Integration (Optional)
 
 If [qmd](https://github.com/tobi/qmd) is installed, agent-council automatically updates the index:
 - **Create:** Runs `qmd update` so new agent memory is immediately searchable
 - **Remove:** Runs `qmd update` to clean up removed agent files
-
-**Note:** qmd is optional. If not installed, these steps are skipped silently.
-
-When enabled, two-way search works:
-```bash
-# Main agent searches agent memory
-qmd search "topic" -c agents
-
-# Agents search brain  
-qmd search "topic" -c brain
-```
-
-Set up the agents collection: `qmd collection add ~/clawd/agents/ --name agents --mask "**/*.md"`
 
 ## Finding Discord IDs
 

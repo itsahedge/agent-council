@@ -24,7 +24,7 @@ GUILD_ID="${DISCORD_GUILD_ID:-}"
 CRON_TIME="23:00"  # Default: daily memory at 11 PM
 SKIP_CRON=false
 SKILL_DIR="$(dirname "$0")/.."
-WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/clawd/agents}"
+WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/workspace/agents}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -73,7 +73,7 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo ""
   echo "Environment:"
   echo "  DISCORD_GUILD_ID      Discord server ID (required for --create)"
-  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/clawd/agents)"
+  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/workspace/agents)"
   echo ""
   echo "Examples:"
   echo "  $0 --id watson --name Watson --emoji 🔬 --specialty 'Deep research' --create research"
@@ -159,26 +159,39 @@ if [[ -n "$CREATE_CHANNEL" ]]; then
   echo ""
   echo "📺 Creating Discord channel #$CREATE_CHANNEL..."
   
-  # Build channel creation command
-  CMD="openclaw message channel-create --name \"$CREATE_CHANNEL\" --guildId \"$GUILD_ID\""
-  [[ -n "$CATEGORY_ID" ]] && CMD="$CMD --parentId \"$CATEGORY_ID\""
+  TOPIC="${TOPIC:-$NAME $EMOJI — $SPECIALTY}"
   
-  # Create channel and capture ID
-  RESULT=$(eval "$CMD --json" 2>/dev/null)
-  CHANNEL_ID=$(echo "$RESULT" | jq -r '.channel.id // empty')
+  # Get Discord bot token from config
+  DISCORD_TOKEN=$(cat ~/.openclaw/openclaw.json | jq -r '.channels.discord.token // empty')
+  if [[ -z "$DISCORD_TOKEN" ]]; then
+    echo "   ✗ Discord bot token not found in config"
+    exit 1
+  fi
+  
+  # Build request body
+  BODY=$(jq -n \
+    --arg name "$CREATE_CHANNEL" \
+    --arg topic "$TOPIC" \
+    --arg parentId "${CATEGORY_ID:-}" \
+    '{name: $name, topic: $topic, type: 0} |
+     if $parentId != "" then . + {parent_id: $parentId} else . end')
+  
+  # Create channel via Discord REST API
+  RESULT=$(curl -s -X POST \
+    "https://discord.com/api/v10/guilds/$GUILD_ID/channels" \
+    -H "Authorization: Bot $DISCORD_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$BODY")
+  
+  CHANNEL_ID=$(echo "$RESULT" | jq -r '.id // empty')
   
   if [[ -z "$CHANNEL_ID" ]]; then
     echo "   ✗ Failed to create channel"
-    echo "$RESULT"
+    echo "$RESULT" | jq . 2>/dev/null || echo "$RESULT"
     exit 1
   fi
   
   echo "   ✓ Created channel: $CHANNEL_ID"
-  
-  # Set topic
-  TOPIC="${TOPIC:-$NAME $EMOJI — $SPECIALTY}"
-  echo "   Setting topic: $TOPIC"
-  openclaw message channel-edit --channelId "$CHANNEL_ID" --topic "$TOPIC" >/dev/null 2>&1 || true
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -198,7 +211,7 @@ fi
 
 CURRENT_AGENTS=$(echo "$CONFIG" | jq -c '.parsed.agents.list // []')
 CURRENT_BINDINGS=$(echo "$CONFIG" | jq -c '.parsed.bindings // []')
-CURRENT_CHANNELS=$(echo "$CONFIG" | jq -c '.parsed.discord.channels // {}')
+CURRENT_CHANNELS=$(echo "$CONFIG" | jq -c --arg gid "$GUILD_ID" '.parsed.channels.discord.guilds[$gid].channels // {}')
 
 # SAFETY: If we have agents but got empty array, something's wrong
 AGENT_COUNT=$(echo "$CURRENT_AGENTS" | jq 'length')
@@ -256,14 +269,22 @@ if [[ -n "$CHANNEL_ID" ]]; then
   
   # Add to allowlist
   CHANNELS=$(echo "$CURRENT_CHANNELS" | jq --arg id "$CHANNEL_ID" '. + { ($id): { allow: true } }')
-  PATCH=$(echo "$PATCH" | jq --argjson channels "$CHANNELS" '. + { discord: { channels: $channels } }')
+  PATCH=$(echo "$PATCH" | jq --argjson channels "$CHANNELS" --arg gid "$GUILD_ID" '. + { channels: { discord: { guilds: { ($gid): { channels: $channels } } } } }')
   
   echo "   ✓ Added binding: $ID → #$CHANNEL_ID"
   echo "   ✓ Added to allowlist"
 fi
 
 # Apply config
-openclaw gateway config.patch --raw "$(echo "$PATCH" | jq -c .)"
+# Get base hash for config patch (required for optimistic locking)
+BASE_HASH=$(openclaw gateway call config.get --json 2>/dev/null | jq -r '.hash // empty')
+if [[ -z "$BASE_HASH" ]]; then
+  echo "   ✗ Failed to get config hash"
+  exit 1
+fi
+
+PATCH_PARAMS=$(jq -n --arg raw "$(echo "$PATCH" | jq -c .)" --arg hash "$BASE_HASH" '{raw: $raw, baseHash: $hash}')
+openclaw gateway call config.patch --params "$PATCH_PARAMS" --json --timeout 30000 >/dev/null 2>&1
 echo "   ✓ Config applied"
 
 # ─────────────────────────────────────────────────────────────
