@@ -90,6 +90,11 @@ New bindings are **prepended** (not appended), so specific channel bindings take
 ### Daily Memory by Default
 Every agent gets a nightly cron that triggers memory consolidation. Agents learn from their work and build rich context over time. Use `--no-cron` to opt out.
 
+### Cron Job Patterns
+Agents can create their own cron jobs, but OpenClaw's delivery system has pitfalls. Agent Council documents the correct patterns and generated agents include inline cron rules in their SOUL.md. See [examples/cron-jobs-principles.md](./examples/cron-jobs-principles.md) for a starter template you can drop into your workspace.
+
+**The key rule:** Always use `sessionTarget: "isolated"` + `agentTurn` + `delivery.mode: "none"`, and have the payload explicitly send to Discord via the message tool. Never use `systemEvent` or `delivery.mode: "announce"` for anything that should appear in a channel.
+
 ### Category Ownership
 Agents can own Discord categories. When you create new channels in an owned category, run `sync-category.sh` to auto-bind them:
 
@@ -117,9 +122,15 @@ Or claim during agent creation:
 | `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
 | `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
 
+## Examples
+
+| File | Description |
+|------|-------------|
+| [cron-jobs-principles.md](./examples/cron-jobs-principles.md) | Cron job creation rules template — copy to your workspace and customize with your channel IDs |
+
 ## Documentation
 
-See [SKILL.md](./SKILL.md) for full options, examples, and manual setup instructions.
+See [SKILL.md](./SKILL.md) for full cron job patterns, delivery routing, options reference, and manual setup instructions.
 
 ## License
 
