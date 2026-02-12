@@ -67,7 +67,7 @@ if [[ "$DELETE_CHANNEL" == "true" ]] && [[ -n "$CHANNEL_ID" ]]; then
 fi
 
 # Delete workspace
-WORKSPACE="$HOME/clawd/agents/$ID"
+WORKSPACE="$HOME/workspace/agents/$ID"
 if [[ "$DELETE_WORKSPACE" == "true" ]] && [[ -d "$WORKSPACE" ]]; then
   rm -rf "$WORKSPACE"
   echo "✓ Deleted workspace: $WORKSPACE"
