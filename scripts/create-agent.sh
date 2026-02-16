@@ -149,7 +149,57 @@ If there are system events (cron jobs), handle them.
 Otherwise, reply \`HEARTBEAT_OK\`.
 EOF
 
-echo "   ✓ Created SOUL.md, HEARTBEAT.md, memory/"
+cat > "$WORKSPACE/AGENTS.md" << 'AGENTSEOF'
+# AGENTS.md - Your Workspace
+
+This folder is home. Treat it that way.
+
+## Every Session
+
+Before doing anything else:
+1. Read `SOUL.md` — this is who you are
+2. Read `USER.md` — this is who you're helping
+3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+
+Don't ask permission. Just do it.
+
+## Use qmd for Recall
+
+**Before answering from memory, SEARCH FIRST:**
+```bash
+qmd query "what did we decide about X?" --limit 3  # LLM-reranked (best)
+qmd search "topic" -c memory                        # Fast keyword search
+qmd vsearch "concept"                                # Semantic vector search
+```
+
+qmd indexes your memory files, brain docs, and shared workspace. Use it instead of guessing.
+
+**After significant work:** Run `qmd update` to re-index.
+
+## Memory
+
+Write to `memory/YYYY-MM-DD.md` AS YOU WORK — don't wait for end of day.
+- One file per date, always. No suffixes.
+- `MEMORY.md` = long-term curated memory (main session only)
+- **Text > Brain** — if you want to remember it, write it down.
+
+## Safety
+
+- Don't exfiltrate private data. Ever.
+- Don't run destructive commands without asking. `trash` > `rm`.
+
+## External vs Internal
+
+**Safe to do freely:** Read files, explore, search web, work within workspace.
+**Ask first:** Emails, tweets, public posts, anything that leaves the machine.
+
+## Make It Yours
+
+This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+AGENTSEOF
+
+echo "   ✓ Created SOUL.md, HEARTBEAT.md, AGENTS.md, memory/"
 
 # ─────────────────────────────────────────────────────────────
 # 2. Discord channel (create or use existing)
