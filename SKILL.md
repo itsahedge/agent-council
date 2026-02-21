@@ -44,7 +44,7 @@ export DISCORD_GUILD_ID="123456789012345678"  # Your server ID
 ```
 
 This will:
-- Create `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md
+- Create `~/workspace/agents/watson/` with SOUL.md, HEARTBEAT.md
 - Create Discord #research channel in the specified category
 - Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
 - Bind watson agent to #research
@@ -266,7 +266,7 @@ Bindings are **prepended** (not appended) so new specific bindings take priority
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
-| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
+| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/workspace/agents`) |
 
 ## qmd Integration (Optional)
 
