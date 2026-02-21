@@ -44,7 +44,7 @@ export DISCORD_GUILD_ID="123456789012345678"  # Your server ID
 ```
 
 This will:
-- Create `~/workspace/agents/watson/` with SOUL.md, HEARTBEAT.md
+- Create `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md
 - Create Discord #research channel in the specified category
 - Set channel topic: "Watson 🔬 — Deep research and competitive analysis"
 - Bind watson agent to #research
@@ -109,19 +109,38 @@ Agents can own Discord categories. Channels in owned categories can be auto-boun
 
 Agents can create and manage their own cron jobs. **Follow these patterns exactly** to ensure messages route to the correct Discord channel.
 
-### ⚠️ CRITICAL: Delivery Pattern
+### Delivery Pattern
 
-**NEVER use `delivery.mode: "announce"`** — it misroutes messages (e.g., to Telegram instead of Discord). The `delivery.channel` field expects a *platform name* (like "discord"), not a channel ID. Putting a channel ID there causes unpredictable fallback routing.
+Two options for cron job delivery:
 
-**ALWAYS use this pattern:**
+**Option A: `--announce` (preferred for simple jobs)**
+Use `--announce --channel discord --to channel:<CHANNEL_ID>`. The gateway posts a summary to the channel automatically.
 
-```json
-{
-  "delivery": { "mode": "none" }
-}
+```bash
+openclaw cron add \
+  --name "My Task" \
+  --agent myagent \
+  --cron "0 9 * * *" \
+  --session isolated \
+  --model sonnet \
+  --announce --channel discord --to "channel:YOUR_CHANNEL_ID" \
+  --message "Do the task."
 ```
 
-Then have the job payload explicitly send to Discord using the **message tool**. This is how every working cron job operates.
+**Option B: `delivery: none` + message tool (for custom formatting)**
+Have the agent send to Discord explicitly using the message tool in its payload. Use this when you need full control over formatting, mentions, or multi-message output.
+
+```bash
+openclaw cron add \
+  --name "My Task" \
+  --agent myagent \
+  --cron "0 9 * * *" \
+  --session isolated \
+  --model sonnet \
+  --message "Do the task. Then send the result to Discord using the message tool (action=send, channel=discord, target=channel:YOUR_CHANNEL_ID). Prepend <@OWNER_USER_ID>."
+```
+
+**⚠️ Common mistake:** Setting `--channel` to a channel ID instead of a platform name (e.g., `discord`). The `--channel` flag expects the platform, `--to` expects the destination.
 
 ### Creating a Cron Job That Posts to Discord
 
@@ -217,7 +236,7 @@ Before creating, always check for duplicates:
 | `--name` | ✓ | Display name |
 | `--emoji` | ✓ | Agent emoji |
 | `--specialty` | ✓ | What the agent does |
-| `--model` | | Model (default: claude-sonnet-4-5) |
+| `--model` | | Model (default: claude-sonnet-4-6) |
 | `--channel` | | Existing Discord channel ID |
 | `--create` | | Create new channel with this name |
 | `--category` | | Category ID for new channel |
@@ -247,7 +266,7 @@ Bindings are **prepended** (not appended) so new specific bindings take priority
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
-| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/workspace/agents`) |
+| `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
 
 ## qmd Integration (Optional)
 
