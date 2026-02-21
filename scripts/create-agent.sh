@@ -24,7 +24,7 @@ GUILD_ID="${DISCORD_GUILD_ID:-}"
 CRON_TIME="23:00"  # Default: daily memory at 11 PM
 SKIP_CRON=false
 SKILL_DIR="$(dirname "$0")/.."
-WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/clawd/agents}"
+WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/workspace/agents}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -73,7 +73,7 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo ""
   echo "Environment:"
   echo "  DISCORD_GUILD_ID      Discord server ID (required for --create)"
-  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/clawd/agents)"
+  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/workspace/agents)"
   echo ""
   echo "Examples:"
   echo "  $0 --id watson --name Watson --emoji 🔬 --specialty 'Deep research' --create research"
