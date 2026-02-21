@@ -18,13 +18,13 @@ set -e
 #   --tz           Timezone for cron (default: America/New_York)
 
 # Defaults
-MODEL="anthropic/claude-sonnet-4-5"
+MODEL="anthropic/claude-sonnet-4-6"
 TZ="America/New_York"
 GUILD_ID="${DISCORD_GUILD_ID:-}"
 CRON_TIME="23:00"  # Default: daily memory at 11 PM
 SKIP_CRON=false
 SKILL_DIR="$(dirname "$0")/.."
-WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/workspace/agents}"
+WORKSPACE_ROOT="${AGENT_WORKSPACE_ROOT:-$HOME/clawd/agents}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -64,7 +64,7 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo "  --topic        Channel topic (auto-generated if not set)"
   echo ""
   echo "Optional:"
-  echo "  --model        Model (default: claude-sonnet-4-5)"
+  echo "  --model        Model (default: claude-sonnet-4-6)"
   echo "  --cron         Daily memory cron time (default: 23:00)"
   echo "  --no-cron      Skip daily memory cron setup"
   echo "  --tz           Timezone (default: America/New_York)"
@@ -73,7 +73,7 @@ if [[ -z "$ID" ]] || [[ -z "$NAME" ]] || [[ -z "$EMOJI" ]] || [[ -z "$SPECIALTY"
   echo ""
   echo "Environment:"
   echo "  DISCORD_GUILD_ID      Discord server ID (required for --create)"
-  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/workspace/agents)"
+  echo "  AGENT_WORKSPACE_ROOT  Agent workspace root (default: ~/clawd/agents)"
   echo ""
   echo "Examples:"
   echo "  $0 --id watson --name Watson --emoji 🔬 --specialty 'Deep research' --create research"
@@ -133,9 +133,6 @@ Brief note about what happened, what was decided, or what was learned.
 
 The nightly memory cron is for **consolidation**, not primary writing. Capture important moments as they happen.
 
-## Cron Jobs
-Before creating any cron job or reminder, read the cron job rules in your workspace (e.g., \`brain/principles/cron-jobs.md\`). Key rule: always use \`sessionTarget: "isolated"\` + \`agentTurn\` + \`delivery.mode: "none"\`, and explicitly send to Discord via the message tool in the payload. Never use \`systemEvent\` or \`delivery.mode: "announce"\` for reminders.
-
 ---
 *Customize this as your role evolves.*
 EOF
@@ -149,7 +146,57 @@ If there are system events (cron jobs), handle them.
 Otherwise, reply \`HEARTBEAT_OK\`.
 EOF
 
-echo "   ✓ Created SOUL.md, HEARTBEAT.md, memory/"
+cat > "$WORKSPACE/AGENTS.md" << 'AGENTSEOF'
+# AGENTS.md - Your Workspace
+
+This folder is home. Treat it that way.
+
+## Every Session
+
+Before doing anything else:
+1. Read `SOUL.md` — this is who you are
+2. Read `USER.md` — this is who you're helping
+3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+
+Don't ask permission. Just do it.
+
+## Use qmd for Recall
+
+**Before answering from memory, SEARCH FIRST:**
+```bash
+qmd query "what did we decide about X?" --limit 3  # LLM-reranked (best)
+qmd search "topic" -c memory                        # Fast keyword search
+qmd vsearch "concept"                                # Semantic vector search
+```
+
+qmd indexes your memory files, brain docs, and shared workspace. Use it instead of guessing.
+
+**After significant work:** Run `qmd update` to re-index.
+
+## Memory
+
+Write to `memory/YYYY-MM-DD.md` AS YOU WORK — don't wait for end of day.
+- One file per date, always. No suffixes.
+- `MEMORY.md` = long-term curated memory (main session only)
+- **Text > Brain** — if you want to remember it, write it down.
+
+## Safety
+
+- Don't exfiltrate private data. Ever.
+- Don't run destructive commands without asking. `trash` > `rm`.
+
+## External vs Internal
+
+**Safe to do freely:** Read files, explore, search web, work within workspace.
+**Ask first:** Emails, tweets, public posts, anything that leaves the machine.
+
+## Make It Yours
+
+This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+AGENTSEOF
+
+echo "   ✓ Created SOUL.md, HEARTBEAT.md, AGENTS.md, memory/"
 
 # ─────────────────────────────────────────────────────────────
 # 2. Discord channel (create or use existing)
@@ -195,6 +242,27 @@ if [[ -n "$CREATE_CHANNEL" ]]; then
   fi
   
   echo "   ✓ Created channel: $CHANNEL_ID"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 2b. Copy auth profiles from default agent
+# ─────────────────────────────────────────────────────────────
+OPENCLAW_DIR="$HOME/.openclaw"
+AGENT_AUTH_DIR="$OPENCLAW_DIR/agents/$ID/agent"
+mkdir -p "$AGENT_AUTH_DIR"
+
+# Find default agent's auth-profiles.json to copy
+DEFAULT_AGENT_ID=$(cat "$OPENCLAW_DIR/openclaw.json" 2>/dev/null | jq -r '.agents.list[] | select(.default == true) | .id' | head -1)
+DEFAULT_AUTH="$OPENCLAW_DIR/agents/${DEFAULT_AGENT_ID:-claire}/agent/auth-profiles.json"
+
+if [[ -f "$DEFAULT_AUTH" ]]; then
+  cp "$DEFAULT_AUTH" "$AGENT_AUTH_DIR/auth-profiles.json"
+  echo "   ✓ Auth profiles copied from $DEFAULT_AGENT_ID"
+elif [[ -f "$OPENCLAW_DIR/agents/main/agent/auth-profiles.json" ]]; then
+  cp "$OPENCLAW_DIR/agents/main/agent/auth-profiles.json" "$AGENT_AUTH_DIR/auth-profiles.json"
+  echo "   ✓ Auth profiles copied from main"
+else
+  echo "   ⚠ No auth-profiles.json found to copy — agent may fail to authenticate"
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -306,18 +374,31 @@ if [[ "$SKIP_CRON" != "true" ]]; then
     '.jobs[] | select(.agentId == $agent and (.name | test("memory|Memory"))) | .id' | head -1)
   [[ -n "$EXISTING" ]] && openclaw cron remove --id "$EXISTING" >/dev/null 2>&1
   
-  # Create new cron (isolated session + wakeMode now = actually executes)
-  openclaw cron add \
+  # Determine delivery channel
+  DELIVER_CHANNEL_ID="${CHANNEL_ID:-}"
+  
+  # Create new cron
+  CRON_CMD=(openclaw cron add \
     --name "$NAME Daily Memory Update" \
     --cron "$MINUTE $HOUR * * *" \
     --tz "$TZ" \
-    --session isolated \
     --agent "$ID" \
-    --wake now \
-    --agent-turn "End of day memory update: Review today's conversations and activity. Create/update memory/\$(date +%Y-%m-%d).md with a summary of: what was worked on, decisions made, progress, and context for tomorrow. After updating, confirm with '☁️ Memory Updated'." \
-    >/dev/null 2>&1
+    --model sonnet \
+    --session isolated \
+    --message "End of day memory update: Review today's conversations and activity. Create/update memory/\$(date +%Y-%m-%d).md with a summary of: what was worked on, decisions made, progress, and context for tomorrow. If nothing new, reply HEARTBEAT_OK.")
   
-  echo "   ✓ Cron job created"
+  # Add delivery target if we have a channel
+  if [[ -n "$DELIVER_CHANNEL_ID" ]]; then
+    CRON_CMD+=(--announce --channel discord --to "channel:$DELIVER_CHANNEL_ID")
+  fi
+  
+  "${CRON_CMD[@]}" >/dev/null 2>&1
+  
+  if [[ $? -eq 0 ]]; then
+    echo "   ✓ Cron job created"
+  else
+    echo "   ✗ Cron job creation failed (create manually with: openclaw cron add --name \"$NAME Daily Memory Update\" --agent $ID --cron \"$MINUTE $HOUR * * *\")"
+  fi
 fi
 
 # ─────────────────────────────────────────────────────────────
