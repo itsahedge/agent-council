@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-# Remove an agent (config only, keeps workspace)
+# Remove an agent
+# Updated for OpenClaw 2026.3.x — uses `openclaw agents delete` and `openclaw agents unbind`
+#
 # Usage: ./remove-agent.sh --id <agent-id> [--delete-workspace] [--delete-channel]
 
 while [[ $# -gt 0 ]]; do
@@ -20,59 +22,51 @@ fi
 
 echo "Removing agent: $ID"
 
-# Get current config
-CONFIG=$(openclaw gateway call config.get --json)
+# Get channel IDs before removing (for optional channel deletion)
+CONFIG=$(openclaw gateway call config.get --json 2>/dev/null)
+CHANNEL_IDS=$(echo "$CONFIG" | jq -r --arg id "$ID" \
+  '.parsed.bindings[] | select(.agentId == $id and .match.channel == "discord") | .match.peer.id')
 
-# SAFETY: Validate config
-if ! echo "$CONFIG" | jq -e '.parsed' >/dev/null 2>&1; then
-  echo "✗ Failed to get config. Aborting."
-  exit 1
-fi
+# Remove all bindings for this agent
+openclaw agents unbind --agent "$ID" --all >/dev/null 2>&1 && \
+  echo "✓ Removed all bindings" || \
+  echo "⚠ No bindings to remove (or agent not found)"
 
-# Get channel ID before removing binding
-CHANNEL_ID=$(echo "$CONFIG" | jq -r --arg id "$ID" \
-  '.parsed.bindings[] | select(.agentId == $id and .match.channel == "discord") | .match.peer.id' | head -1)
-
-# Remove from agents list
-AGENTS=$(echo "$CONFIG" | jq -c --arg id "$ID" '.parsed.agents.list | map(select(.id != $id))')
-
-# Remove bindings for this agent
-BINDINGS=$(echo "$CONFIG" | jq -c --arg id "$ID" '.parsed.bindings | map(select(.agentId != $id))')
-
-# Build patch
-PATCH=$(jq -n --argjson a "$AGENTS" --argjson b "$BINDINGS" \
-  '{ agents: { list: $a }, bindings: $b }')
-
-# Remove from allowlist if we have a channel
-if [[ -n "$CHANNEL_ID" ]]; then
-  CHANNELS=$(echo "$CONFIG" | jq -c --arg id "$CHANNEL_ID" 'del(.parsed.discord.channels[$id])')
-  PATCH=$(echo "$PATCH" | jq --argjson c "$CHANNELS" '. + { discord: { channels: $c } }')
-fi
-
-openclaw gateway config.patch --raw "$(echo "$PATCH" | jq -c .)"
-echo "✓ Removed from config"
-
-# Remove cron jobs
+# Remove cron jobs for this agent
 CRON_IDS=$(openclaw cron list --json 2>/dev/null | jq -r --arg id "$ID" '.jobs[] | select(.agentId == $id) | .id')
 for cron_id in $CRON_IDS; do
   openclaw cron remove --id "$cron_id" >/dev/null 2>&1
   echo "✓ Removed cron job: $cron_id"
 done
 
-# Delete Discord channel
-if [[ "$DELETE_CHANNEL" == "true" ]] && [[ -n "$CHANNEL_ID" ]]; then
-  openclaw message channel-delete --channelId "$CHANNEL_ID" >/dev/null 2>&1 && \
-    echo "✓ Deleted Discord channel: $CHANNEL_ID" || \
-    echo "✗ Failed to delete channel (may need manual deletion)"
+# Delete agent from config
+openclaw agents delete "$ID" >/dev/null 2>&1 && \
+  echo "✓ Removed from agent config" || \
+  echo "⚠ Agent not found in config (may already be removed)"
+
+# Delete Discord channels
+if [[ "$DELETE_CHANNEL" == "true" ]]; then
+  for ch_id in $CHANNEL_IDS; do
+    openclaw message channel-delete --channelId "$ch_id" >/dev/null 2>&1 && \
+      echo "✓ Deleted Discord channel: $ch_id" || \
+      echo "✗ Failed to delete channel $ch_id (may need manual deletion)"
+  done
 fi
 
 # Delete workspace
 WORKSPACE="$HOME/workspace/agents/$ID"
 if [[ "$DELETE_WORKSPACE" == "true" ]] && [[ -d "$WORKSPACE" ]]; then
-  rm -rf "$WORKSPACE"
+  trash "$WORKSPACE" 2>/dev/null || rm -rf "$WORKSPACE"
   echo "✓ Deleted workspace: $WORKSPACE"
 else
-  echo "  Workspace preserved: $WORKSPACE"
+  [[ -d "$WORKSPACE" ]] && echo "  Workspace preserved: $WORKSPACE"
+fi
+
+# Delete agent state dir
+AGENT_STATE="$HOME/.openclaw/agents/$ID"
+if [[ "$DELETE_WORKSPACE" == "true" ]] && [[ -d "$AGENT_STATE" ]]; then
+  trash "$AGENT_STATE" 2>/dev/null || rm -rf "$AGENT_STATE"
+  echo "✓ Deleted agent state: $AGENT_STATE"
 fi
 
 # Update qmd index
