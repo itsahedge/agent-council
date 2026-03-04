@@ -2,6 +2,12 @@
 set -e
 
 # Bind an agent to a Discord channel
+# Updated for OpenClaw 2026.3.x
+#
+# Note: `openclaw agents bind` works at channel level (discord, telegram),
+# not per-Discord-channel-ID. For channel-specific routing we still need
+# config patching for the bindings array.
+#
 # Usage: ./bind-channel.sh --agent <id> --channel <id> [--topic "..."]
 
 GUILD_ID="${DISCORD_GUILD_ID:-}"
@@ -33,30 +39,35 @@ if [[ -n "$CREATE_CHANNEL" ]]; then
     exit 1
   fi
   [[ "$QUIET" != "true" ]] && echo "Creating channel #$CREATE_CHANNEL..."
-  CMD="openclaw message channel-create --name \"$CREATE_CHANNEL\" --guildId \"$GUILD_ID\""
-  [[ -n "$CATEGORY_ID" ]] && CMD="$CMD --parentId \"$CATEGORY_ID\""
-  RESULT=$(eval "$CMD --json")
-  CHANNEL_ID=$(echo "$RESULT" | jq -r '.channel.id')
+
+  CREATE_CMD="openclaw message channel-create --name \"$CREATE_CHANNEL\" --guildId \"$GUILD_ID\""
+  [[ -n "$CATEGORY_ID" ]] && CREATE_CMD="$CREATE_CMD --parentId \"$CATEGORY_ID\""
+  RESULT=$(eval "$CREATE_CMD --json" 2>/dev/null)
+  CHANNEL_ID=$(echo "$RESULT" | jq -r '.channel.id // .id // empty')
+
+  if [[ -z "$CHANNEL_ID" ]]; then
+    echo "✗ Failed to create channel"
+    exit 1
+  fi
+
   [[ "$QUIET" != "true" ]] && echo "Created: $CHANNEL_ID"
-  
+
   if [[ -n "$TOPIC" ]]; then
-    openclaw message channel-edit --channelId "$CHANNEL_ID" --topic "$TOPIC" >/dev/null 2>&1
+    openclaw message channel-edit --channelId "$CHANNEL_ID" --topic "$TOPIC" >/dev/null 2>&1 || true
   fi
 fi
 
-# Get current config
-CONFIG=$(openclaw gateway call config.get --json)
+# Channel-specific Discord bindings require config patch
+CONFIG=$(openclaw gateway call config.get --json 2>/dev/null)
 
-# SAFETY: Validate config
 if ! echo "$CONFIG" | jq -e '.parsed' >/dev/null 2>&1; then
   echo "✗ Failed to get config. Aborting."
   exit 1
 fi
 
-BINDINGS=$(echo "$CONFIG" | jq -c '.parsed.bindings // []')
-CHANNELS=$(echo "$CONFIG" | jq -c '.parsed.discord.channels // {}')
+CURRENT_BINDINGS=$(echo "$CONFIG" | jq -c '.parsed.bindings // []')
 
-# Build binding
+# Build and prepend binding (first match wins)
 NEW_BINDING=$(jq -n \
   --arg agentId "$AGENT_ID" \
   --arg channelId "$CHANNEL_ID" \
@@ -65,17 +76,22 @@ NEW_BINDING=$(jq -n \
     match: { channel: "discord", peer: { kind: "channel", id: $channelId } }
   }')
 
-# Prepend and dedupe
-BINDINGS=$(echo "$BINDINGS" | jq --argjson new "$NEW_BINDING" \
-  '[($new)] + [.[] | select(.match.peer.id != $new.match.peer.id)]')
+BINDINGS=$(echo "$CURRENT_BINDINGS" | jq --argjson new "$NEW_BINDING" \
+  '[($new)] + [.[] | select(.match.peer.id != $new.match.peer.id or .agentId != $new.agentId)]')
 
-# Add to allowlist
-CHANNELS=$(echo "$CHANNELS" | jq --arg id "$CHANNEL_ID" '. + { ($id): { allow: true } }')
+# Add to guild allowlist
+if [[ -n "$GUILD_ID" ]]; then
+  CURRENT_CHANNELS=$(echo "$CONFIG" | jq -c --arg gid "$GUILD_ID" '.parsed.channels.discord.guilds[$gid].channels // {}')
+  CHANNELS=$(echo "$CURRENT_CHANNELS" | jq --arg id "$CHANNEL_ID" '. + { ($id): { allow: true } }')
 
-# Patch
-PATCH=$(jq -n --argjson b "$BINDINGS" --argjson c "$CHANNELS" \
-  '{ bindings: $b, discord: { channels: $c } }')
+  PATCH=$(jq -n --argjson b "$BINDINGS" --argjson c "$CHANNELS" --arg gid "$GUILD_ID" \
+    '{ bindings: $b, channels: { discord: { guilds: { ($gid): { channels: $c } } } } }')
+else
+  PATCH=$(jq -n --argjson b "$BINDINGS" '{ bindings: $b }')
+fi
 
-openclaw gateway config.patch --raw "$(echo "$PATCH" | jq -c .)"
+BASE_HASH=$(openclaw gateway call config.get --json 2>/dev/null | jq -r '.hash // empty')
+PATCH_PARAMS=$(jq -n --arg raw "$(echo "$PATCH" | jq -c .)" --arg hash "$BASE_HASH" '{raw: $raw, baseHash: $hash}')
+openclaw gateway call config.patch --params "$PATCH_PARAMS" --json --timeout 30000 >/dev/null 2>&1
 
 [[ "$QUIET" != "true" ]] && echo "✓ Bound $AGENT_ID → #$CHANNEL_ID"

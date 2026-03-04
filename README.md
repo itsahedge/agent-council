@@ -2,39 +2,30 @@
 
 **Discord-integrated agent management for OpenClaw.**
 
-OpenClaw has built-in multi-agent support — routing, workspaces, bindings. But spinning up a Discord-connected agent requires manual config editing, channel creation, allowlist management, and careful array merging.
+Updated for **OpenClaw 2026.3.x** — uses native CLI commands where possible, with config patching only for Discord channel-specific routing.
 
-Agent Council handles the full Discord integration: create the channel, bind the agent, configure permissions, and set up daily memory — all in one command.
+## What OpenClaw Provides (Native CLI)
 
-## What OpenClaw Provides
-
-- **Agent routing** — Messages go to the right agent based on bindings
-- **Workspace loading** — Agent's files (SOUL.md, etc.) loaded into context
-- **Cron jobs** — Schedule tasks to specific agents
-- **Config-driven** — Everything lives in `openclaw.json`
+```bash
+openclaw agents list              # List all agents
+openclaw agents bindings          # Show channel bindings
+openclaw agents add <id>          # Register a new agent
+openclaw agents delete <id>       # Remove an agent
+openclaw agents bind --agent <id> --bind discord    # Channel-level routing
+openclaw agents unbind --agent <id> --bind discord
+openclaw agents set-identity --agent <id> --name "Name" --emoji "🔬"
+```
 
 ## What Agent Council Adds
 
-### Discord Integration (Primary Focus)
+The CLI handles agent registration, but spinning up a fully Discord-connected agent still requires: creating the channel, setting topics, adding to allowlists, per-channel-ID binding (which `agents bind` doesn't support), workspace scaffolding, and daily memory cron. Agent Council does all of that in one command.
 
-| Manual Setup | With Agent Council |
-|--------------|-------------------|
-| Create Discord channel via API | `--create "channel-name"` |
-| Set channel topic | Auto-generated from agent specialty |
-| Add to `discord.channels` allowlist | Automatic |
-| Edit `bindings` array (easy to wipe) | Safe merge, prepends correctly |
-| Place in category | `--category "id"` |
-
-### Agent Lifecycle
-
-| Manual Setup | With Agent Council |
-|--------------|-------------------|
-| `mkdir` + write SOUL.md + HEARTBEAT.md | One command |
-| Manually edit `agents.list` JSON | Automatic, safe merge |
-| Manually add memory cron | **Default** — every agent gets daily memory |
-| Multi-step cleanup | `remove-agent.sh --delete-workspace --delete-channel` |
-
-**The key value:** One command creates a Discord channel, binds an agent to it, configures permissions, and sets up persistent daily memory.
+- **Discord channel creation** with auto-generated topic
+- **Per-channel-ID routing** (specific Discord channels → specific agents)
+- **Safe config merging** (arrays replace in OpenClaw — Agent Council handles the merge)
+- **Workspace scaffolding** (SOUL.md, HEARTBEAT.md, IDENTITY.md, memory/)
+- **Daily memory cron** by default
+- **Category ownership** (claim categories, auto-bind new channels)
 
 ## Quick Start
 
@@ -46,7 +37,7 @@ openclaw gateway config.patch --raw '{"skills":{"entries":{"agent-council":{"ena
 # Set your Discord server ID
 export DISCORD_GUILD_ID="123456789012345678"
 
-# Create agent with Discord channel + daily memory (all automatic)
+# Create agent with Discord channel + daily memory
 ~/.openclaw/skills/agent-council/scripts/create-agent.sh \
   --id watson \
   --name "Watson" \
@@ -57,9 +48,10 @@ export DISCORD_GUILD_ID="123456789012345678"
 ```
 
 This creates:
-- `~/clawd/agents/watson/` with SOUL.md, HEARTBEAT.md, memory/
+- Agent registered via `openclaw agents add` + `set-identity`
+- Agent workspace with SOUL.md, HEARTBEAT.md, IDENTITY.md, memory/
 - Discord #research channel with topic
-- Binding: watson → #research
+- Per-channel binding: watson → #research
 - Allowlist entry for #research
 - Daily memory cron at 23:00 ET
 
@@ -69,11 +61,15 @@ This creates:
 |--------|---------|
 | `create-agent.sh` | Full agent setup (workspace, Discord, binding, cron) |
 | `bind-channel.sh` | Bind agent to additional channels |
-| `list-agents.sh` | Show all agents and their Discord bindings |
-| `remove-agent.sh` | Clean removal (config, crons, workspace, channel) |
+| `list-agents.sh` | Show all agents and bindings (wraps native CLI) |
+| `remove-agent.sh` | Clean removal (unbind, delete, workspace, channel) |
 | `claim-category.sh` | Claim a Discord category for an agent |
 | `sync-category.sh` | Bind all channels in a category to its owner |
 | `list-categories.sh` | Show category ownership |
+
+## Why Config Patch Is Still Needed
+
+`openclaw agents bind` works at the **channel level** (discord, telegram) — not per-Discord-channel-ID. For routing specific Discord channels to specific agents (e.g., #research → watson, #finance → sage), the `bindings` array config patch is still required. Agent Council handles this safely.
 
 ## Key Features
 
@@ -88,32 +84,27 @@ OpenClaw's `config.patch` replaces arrays, it doesn't merge them. Agent Council:
 New bindings are **prepended** (not appended), so specific channel bindings take priority over catch-all rules.
 
 ### Daily Memory by Default
-Every agent gets a nightly cron that triggers memory consolidation. Agents learn from their work and build rich context over time. Use `--no-cron` to opt out.
+Every agent gets a nightly cron that triggers memory consolidation. Use `--no-cron` to opt out.
 
-### Cron Job Patterns
-Agents can create their own cron jobs, but OpenClaw's delivery system has pitfalls. Agent Council documents the correct patterns and generated agents include inline cron rules in their SOUL.md. See [examples/cron-jobs-principles.md](./examples/cron-jobs-principles.md) for a starter template you can drop into your workspace.
-
-**The key rule:** Always use `sessionTarget: "isolated"` + `agentTurn` + `delivery.mode: "none"`, and have the payload explicitly send to Discord via the message tool. Never use `systemEvent` or `delivery.mode: "announce"` for anything that should appear in a channel.
+### Auth Profiles
+Agent creation copies SecretRef-backed auth profiles from the default agent — no plaintext tokens in config.
 
 ### Category Ownership
-Agents can own Discord categories. When you create new channels in an owned category, run `sync-category.sh` to auto-bind them:
+Agents can own Discord categories:
 
 ```bash
 # Claim a category for an agent
 ./claim-category.sh --agent chief --category 123456789012345678 --sync
 
-# Later, after adding channels in Discord:
+# After adding channels in Discord:
 ./sync-category.sh --category 123456789012345678
 
 # See all owned categories
 ./list-categories.sh
 ```
 
-Or claim during agent creation:
-```bash
-./create-agent.sh --id chief --name Chief --emoji 👔 \
-  --specialty Leadership --own-category 123456789012345678
-```
+### Cron Job Patterns
+Agents can create their own cron jobs. The key rule: Always use `sessionTarget: "isolated"` + `agentTurn` + `delivery.mode: "none"`, and have the payload explicitly send to Discord via the message tool. See [examples/cron-jobs-principles.md](./examples/cron-jobs-principles.md).
 
 ## Environment Variables
 
@@ -122,15 +113,9 @@ Or claim during agent creation:
 | `DISCORD_GUILD_ID` | For `--create` | Your Discord server ID |
 | `AGENT_WORKSPACE_ROOT` | No | Agent workspace root (default: `~/clawd/agents`) |
 
-## Examples
-
-| File | Description |
-|------|-------------|
-| [cron-jobs-principles.md](./examples/cron-jobs-principles.md) | Cron job creation rules template — copy to your workspace and customize with your channel IDs |
-
 ## Documentation
 
-See [SKILL.md](./SKILL.md) for full cron job patterns, delivery routing, options reference, and manual setup instructions.
+See [SKILL.md](./SKILL.md) for full options reference, cron patterns, and manual setup instructions.
 
 ## License
 
